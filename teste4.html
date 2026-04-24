@@ -1,0 +1,1977 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestão de Serviços ODS Metering Systems</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- SheetJS para Exportação/Importação Excel e CSV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- html2pdf para Exportação PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- Bibliotecas para Código de Barras e Câmera -->
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+    <style>
+        body { background-color: #f3f4f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        /* Ajuste do Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { height: 10px; width: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Estilos de Impressão */
+        @media print {
+            body * { visibility: hidden; }
+            #print-area, #print-area *, #print-area-agenda, #print-area-agenda *, #in-out-print-area, #in-out-print-area *, .print-barcode, .print-barcode * { visibility: visible; }
+            #print-area, #print-area-agenda { position: absolute; left: 0; top: 0; width: 100%; padding: 0; margin: 0; border: none; box-shadow: none; }
+            .print-barcode { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex !important; flex-direction: column; align-items: center; justify-content: center; width: 100%; }
+            .no-print { display: none !important; }
+            @page { size: landscape; margin: 1cm; }
+        }
+
+        /* Tema Personalizado Vermelho ODS */
+        .ods-red-text { color: #dc2626; }
+        .ods-red-bg { background-color: #dc2626; }
+        .ods-red-bg-hover:hover { background-color: #b91c1c; }
+        .ods-red-border { border-color: #dc2626; }
+        .ods-red-border-hover:hover { border-color: #b91c1c; }
+        .ods-red-light-bg { background-color: #fee2e2; }
+        .ods-red-light-text { color: #991b1b; }
+
+        /* Cores de Status */
+        .status-service-bg { background-color: #ef4444; } 
+        .status-service-border { border-color: #b91c1c; }
+        .status-service-bg-hover:hover { background-color: #dc2626; }
+        .status-lab-bg { background-color: #f87171; } 
+        .status-lab-border { border-color: #c53030; }
+        .status-lab-bg-hover:hover { background-color: #ef4444; }
+        .status-dayoff-bg { background-color: #fca5a5; } 
+        .status-dayoff-border { border-color: #e53e3e; }
+        .status-dayoff-bg-hover:hover { background-color: #f87171; }
+        
+        .status-service-legend-bg { background-color: #ef4444; }
+        .status-lab-legend-bg { background-color: #f87171; }
+        .status-dayoff-legend-bg { background-color: #fca5a5; }
+
+        #reader__dashboard_section_csr span, #reader a { display: none !important; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // --- BANCO DE DADOS LOCAL (IndexedDB) ---
+        const LocalDB = {
+            db: null,
+            async init() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open('ODSMeteringDB', 2);
+                    request.onerror = (e) => reject(e.target.error);
+                    request.onsuccess = (e) => {
+                        this.db = e.target.result;
+                        resolve(this.db);
+                    };
+                    request.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        if (!db.objectStoreNames.contains('activities')) db.createObjectStore('activities', { keyPath: 'id' });
+                        if (!db.objectStoreNames.contains('daysOff')) db.createObjectStore('daysOff', { keyPath: 'id' });
+                        if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'id' });
+                        if (!db.objectStoreNames.contains('inventory')) db.createObjectStore('inventory', { keyPath: 'barcode' });
+                    };
+                });
+            },
+            async getAll(storeName) {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction(storeName, 'readonly');
+                    const store = tx.objectStore(storeName);
+                    const req = store.getAll();
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+            },
+            async put(storeName, item) {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction(storeName, 'readwrite');
+                    const store = tx.objectStore(storeName);
+                    const req = store.put(item);
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+            },
+            async delete(storeName, id) {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction(storeName, 'readwrite');
+                    const store = tx.objectStore(storeName);
+                    const req = store.delete(id);
+                    req.onsuccess = () => resolve();
+                    req.onerror = () => reject(req.error);
+                });
+            }
+        };
+
+        const employeesList = [
+            { id: 1, name: 'Marcio Martirios', category: 'Service' },
+            { id: 2, name: 'Phamela Carvalho', category: 'Service' },
+            { id: 3, name: 'Leonardo Tonim', category: 'Service' },
+            { id: 4, name: 'Diego Garcia', category: 'Service' },
+            { id: 5, name: 'Abhner Lage', category: 'Service' },
+            { id: 6, name: 'PSO', category: 'Service' },
+            { id: 7, name: 'Rodrigo Domingues', category: 'Service' },
+            { id: 8, name: 'Ivan Lino', category: 'Service' },
+            { id: 9, name: 'Thiago Gallinucci', category: 'Service' },
+            { id: 10, name: 'Rafael Perin', category: 'Service' },
+            { id: 11, name: 'Victor Franca', category: 'Service' },
+            { id: 12, name: 'Adolfo Eiras', category: 'Lab' },
+            { id: 13, name: 'Carol Bastos', category: 'Lab' },
+            { id: 14, name: 'Leonardo Pereira', category: 'Lab' },
+            { id: 15, name: 'Leonardo Galdino', category: 'Lab' },
+            { id: 16, name: 'Beatriz Matuck', category: 'Lab' },
+            { id: 17, name: 'Marcos Barros', category: 'Lab' },
+            { id: 18, name: 'Matheus Moraes', category: 'Lab' },
+            { id: 19, name: 'Matheus Bandeira', category: 'Lab' },
+            { id: 20, name: 'Francisco Nascimento', category: 'Lab' },
+            { id: 21, name: 'Iago Fiuza', category: 'Lab' },
+            { id: 22, name: 'Caio Campos', category: 'Lab' },
+            { id: 23, name: 'Marcus Fioravante', category: 'Lab' },
+            { id: 24, name: 'Nathan', category: 'Lab' },
+            { id: 25, name: 'Igor Felisberto', category: 'Lab' },
+            { id: 26, name: 'Maiton Bertuso', category: 'Lab' },
+            { id: 27, name: 'Felipe Oliveira', category: 'Lab' },
+            { id: 28, name: 'Renato da Silva', category: 'Lab' },
+            { id: 29, name: 'André Bigeschi', category: 'Lab' },
+            { id: 30, name: 'Marcelo Teófilo', category: 'Lab' },
+            { id: 31, name: 'Claudio Miranda', category: 'Lab' },
+            { id: 32, name: 'Luiz Batista', category: 'Lab' },
+            { id: 33, name: 'Andre Silva', category: 'Lab' },
+            { id: 34, name: 'Pedro Lucena', category: 'Lab' },
+            { id: 35, name: 'Renilson Feitosa', category: 'Lab' }
+        ];
+
+        // --- ÍCONES SVG ---
+        const CalendarIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>;
+        const ListIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>;
+        const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
+        const AlertIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>;
+        const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>;
+        const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>;
+        const SettingsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>;
+        const UploadIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>;
+        const DownloadIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>;
+        const ClipboardCheckIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><polyline points="9 14 11 16 15 12"></polyline></svg>;
+        const PackageIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>;
+        const CameraIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>;
+        const BarcodeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 5v14M8 5v14M12 5v14M17 5v14M21 5v14"></path></svg>;
+
+        const formatDateBR = (dateString) => {
+            if (!dateString) return '';
+            const [y, m, d] = dateString.split('-');
+            return `${d}/${m}/${y}`;
+        };
+
+        const getDatesInRange = (start, end) => {
+            const date = new Date(start + 'T12:00:00');
+            const endDate = new Date(end + 'T12:00:00');
+            const dates = [];
+            while (date <= endDate) {
+                dates.push(date.toISOString().split('T')[0]);
+                date.setDate(date.getDate() + 1);
+            }
+            return dates;
+        };
+
+        // --- ABA DE ESTOQUE (INVENTORY VIEW) ---
+        const InventoryView = ({ inventory, setInventory, showMessage }) => {
+            const [barcodeInput, setBarcodeInput] = useState('');
+            const [qtyInput, setQtyInput] = useState(1);
+            const [opType, setOpType] = useState('in'); // 'in' or 'out'
+            const [isScanning, setIsScanning] = useState(false);
+            
+            const [newItemModal, setNewItemModal] = useState(null);
+            const [newItemName, setNewItemName] = useState('');
+
+            const [showBarcodeModal, setShowBarcodeModal] = useState(null);
+            const [searchTerm, setSearchTerm] = useState('');
+
+            // Efeito para Iniciar/Desligar a Câmera do Scanner
+            useEffect(() => {
+                let html5QrcodeScanner;
+                if (isScanning) {
+                    html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: { width: 250, height: 150 } }, false);
+                    html5QrcodeScanner.render((decodedText) => {
+                        setBarcodeInput(decodedText);
+                        setIsScanning(false);
+                        try { html5QrcodeScanner.clear(); } catch(e){}
+                        showMessage('success', `Código lido: ${decodedText}`);
+                    }, (errorMessage) => { /* ignora erros */ });
+                }
+                return () => {
+                    if(html5QrcodeScanner) {
+                        try { html5QrcodeScanner.clear(); } catch(e){}
+                    }
+                };
+            }, [isScanning]);
+
+            // Efeito para Gerar a Imagem do Código de Barras no Canvas usando formato CODE128
+            useEffect(() => {
+                if (showBarcodeModal && showBarcodeModal.barcode) {
+                    setTimeout(() => {
+                        try {
+                            JsBarcode("#barcode-canvas", showBarcodeModal.barcode, {
+                                format: "CODE128",
+                                lineColor: "#000",
+                                width: 2,
+                                height: 80,
+                                displayValue: true
+                            });
+                        } catch(e) {
+                            console.error("Erro ao gerar barcode:", e);
+                        }
+                    }, 50);
+                }
+            }, [showBarcodeModal]);
+
+            const handleOperation = async (e) => {
+                if(e) e.preventDefault();
+                if(!barcodeInput.trim() || qtyInput <= 0) {
+                    showMessage('error', 'Preencha o código de barras e uma quantidade válida.');
+                    return;
+                }
+
+                const code = barcodeInput.trim();
+                const existingItem = inventory.find(i => i.barcode === code);
+
+                if (!existingItem) {
+                    setNewItemModal({ barcode: code, type: opType, qty: qtyInput });
+                    return;
+                }
+
+                let newQty = opType === 'in' ? existingItem.quantity + parseInt(qtyInput) : existingItem.quantity - parseInt(qtyInput);
+                if (newQty < 0) {
+                    showMessage('error', `Estoque insuficiente! Existem apenas ${existingItem.quantity} unidades de ${existingItem.name}.`);
+                    return;
+                }
+                
+                const updatedItem = { ...existingItem, quantity: newQty, lastUpdated: new Date().toISOString() };
+                
+                try {
+                    await LocalDB.put('inventory', updatedItem);
+                    setInventory(inventory.map(i => i.barcode === code ? updatedItem : i));
+                    showMessage('success', `Operação realizada! Novo estoque de ${updatedItem.name}: ${newQty}`);
+                    setBarcodeInput('');
+                    setQtyInput(1);
+                } catch(err) {
+                    showMessage('error', 'Erro ao salvar no banco de dados.');
+                }
+            };
+
+            const saveNewItem = async (e) => {
+                e.preventDefault();
+                if(!newItemName.trim()) return;
+
+                const newQty = newItemModal.type === 'in' ? parseInt(newItemModal.qty) : 0;
+                const item = { 
+                    barcode: newItemModal.barcode, 
+                    name: newItemName.trim(), 
+                    quantity: newQty, 
+                    lastUpdated: new Date().toISOString() 
+                };
+
+                try {
+                    await LocalDB.put('inventory', item);
+                    setInventory([...inventory, item]);
+                    setNewItemModal(null);
+                    setNewItemName('');
+                    setBarcodeInput('');
+                    setQtyInput(1);
+                    if(newItemModal.type === 'out' && parseInt(newItemModal.qty) > 0) {
+                        showMessage('error', 'Item cadastrado com estoque ZERO. Não foi possível realizar a saída.');
+                    } else {
+                        showMessage('success', `Item "${item.name}" cadastrado com sucesso!`);
+                    }
+                } catch(err) {
+                    showMessage('error', 'Erro ao cadastrar novo item.');
+                }
+            };
+
+            const deleteInventoryItem = async (barcode) => {
+                if(!window.confirm("Tem certeza que deseja excluir este item permanentemente?")) return;
+                try {
+                    await LocalDB.delete('inventory', barcode);
+                    setInventory(inventory.filter(i => i.barcode !== barcode));
+                    showMessage('success', 'Item excluído do estoque.');
+                } catch(err) {
+                    showMessage('error', 'Erro ao excluir item.');
+                }
+            };
+
+            const filteredInventory = inventory.filter(i => 
+                i.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                i.barcode.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+
+            return (
+                <div className="flex flex-col lg:flex-row gap-6 h-full max-w-6xl mx-auto w-full">
+                    {/* PAINEL ESQUERDO: OPERAÇÃO DE ESTOQUE */}
+                    <div className="w-full lg:w-1/3 space-y-6">
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 no-print">
+                            <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                <BarcodeIcon /> Lançamento Rápido
+                            </h2>
+                            
+                            {/* Toggle Entrada / Saída */}
+                            <div className="flex bg-gray-100 p-1 rounded-lg mb-6">
+                                <button 
+                                    onClick={() => setOpType('in')}
+                                    className={`flex-1 py-2 rounded-md text-sm font-bold transition-colors ${opType === 'in' ? 'bg-green-500 text-white shadow' : 'text-gray-500 hover:text-green-600'}`}
+                                >ENTRADA (+)</button>
+                                <button 
+                                    onClick={() => setOpType('out')}
+                                    className={`flex-1 py-2 rounded-md text-sm font-bold transition-colors ${opType === 'out' ? 'bg-orange-500 text-white shadow' : 'text-gray-500 hover:text-orange-600'}`}
+                                >SAÍDA (-)</button>
+                            </div>
+
+                            {/* Câmera Scanner */}
+                            {isScanning ? (
+                                <div className="mb-4 border-2 border-red-500 rounded-lg overflow-hidden relative">
+                                    <div id="reader" className="w-full bg-black"></div>
+                                    <button onClick={() => setIsScanning(false)} className="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded shadow z-50">Fechar Câmera</button>
+                                </div>
+                            ) : (
+                                <button onClick={() => setIsScanning(true)} className="w-full mb-4 bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                                    <CameraIcon /> Escanear com a Câmera
+                                </button>
+                            )}
+
+                            <div className="relative mb-4 flex items-center">
+                                <div className="flex-grow border-t border-gray-200"></div>
+                                <span className="flex-shrink-0 mx-4 text-gray-400 text-xs uppercase font-medium">OU DIGITE</span>
+                                <div className="flex-grow border-t border-gray-200"></div>
+                            </div>
+
+                            {/* Formulário Manual */}
+                            <form onSubmit={handleOperation} className="space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Código de Barras</label>
+                                    <input 
+                                        type="text" 
+                                        value={barcodeInput} 
+                                        onChange={(e) => setBarcodeInput(e.target.value)} 
+                                        placeholder="Ex: AF1234"
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none font-mono text-center tracking-widest bg-gray-50"
+                                        autoFocus
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Quantidade</label>
+                                    <input 
+                                        type="number" 
+                                        min="1"
+                                        value={qtyInput} 
+                                        onChange={(e) => setQtyInput(e.target.value)} 
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none text-center font-bold text-lg"
+                                    />
+                                </div>
+                                <button type="submit" className={`w-full text-white font-bold py-3 rounded-lg shadow-sm transition-colors uppercase tracking-wider ${opType === 'in' ? 'bg-green-600 hover:bg-green-700' : 'bg-orange-500 hover:bg-orange-600'}`}>
+                                    Registrar {opType === 'in' ? 'Entrada' : 'Saída'}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    {/* PAINEL DIREITO: TABELA DE ESTOQUE */}
+                    <div className="w-full lg:w-2/3 bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col max-h-[80vh] no-print">
+                        <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                <PackageIcon /> Controle de Estoque
+                            </h2>
+                            <div className="w-full md:w-64 relative">
+                                <input 
+                                    type="text" 
+                                    placeholder="Buscar item ou código..." 
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="w-full p-2 pl-8 border border-gray-300 rounded-lg text-sm focus:border-red-500 outline-none"
+                                />
+                                <svg className="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto custom-scrollbar border border-gray-200 rounded-lg">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-gray-100 sticky top-0 z-10 shadow-sm">
+                                    <tr className="text-gray-600 text-[10px] uppercase tracking-wider">
+                                        <th className="p-3 border-b border-gray-200 font-bold">Item / Ferramenta</th>
+                                        <th className="p-3 border-b border-gray-200 font-bold text-center">Código</th>
+                                        <th className="p-3 border-b border-gray-200 font-bold text-center">Estoque</th>
+                                        <th className="p-3 border-b border-gray-200 font-bold text-right">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredInventory.length === 0 ? (
+                                        <tr><td colSpan="4" className="p-8 text-center text-gray-500 italic">Nenhum item encontrado no estoque.</td></tr>
+                                    ) : (
+                                        filteredInventory.map(item => (
+                                            <tr key={item.barcode} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                                                <td className="p-3">
+                                                    <div className="font-semibold text-gray-800">{item.name}</div>
+                                                    <div className="text-[9px] text-gray-400">Atualizado: {new Date(item.lastUpdated).toLocaleDateString('pt-BR')}</div>
+                                                </td>
+                                                <td className="p-3 text-center">
+                                                    <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded text-gray-600">{item.barcode}</span>
+                                                </td>
+                                                <td className="p-3 text-center">
+                                                    <span className={`font-bold text-sm px-2 py-1 rounded-full ${item.quantity > 5 ? 'bg-green-100 text-green-800' : item.quantity > 0 ? 'bg-orange-100 text-orange-800' : 'bg-red-100 text-red-800'}`}>
+                                                        {item.quantity} un
+                                                    </span>
+                                                </td>
+                                                <td className="p-3 text-right">
+                                                    <button onClick={() => setShowBarcodeModal(item)} className="text-blue-600 hover:text-blue-800 p-1.5 bg-blue-50 hover:bg-blue-100 rounded transition-colors mr-2" title="Gerar Etiqueta">
+                                                        <BarcodeIcon />
+                                                    </button>
+                                                    <button onClick={() => deleteInventoryItem(item.barcode)} className="text-red-500 hover:text-red-700 p-1.5 hover:bg-red-50 rounded transition-colors" title="Excluir">
+                                                        <TrashIcon />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* MODAL: NOVO ITEM */}
+                    {newItemModal && (
+                        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4 no-print">
+                            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden p-6 border-t-4 border-red-600">
+                                <h3 className="font-bold text-lg text-gray-800 mb-2">Código não cadastrado!</h3>
+                                <p className="text-sm text-gray-600 mb-4">O código <strong className="font-mono">{newItemModal.barcode}</strong> não existe no sistema. Deseja cadastrá-lo agora?</p>
+                                
+                                <form onSubmit={saveNewItem}>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Nome do Item / Equipamento</label>
+                                    <input 
+                                        type="text" 
+                                        value={newItemName}
+                                        onChange={(e) => setNewItemName(e.target.value)}
+                                        placeholder="Ex: Alicate Amperímetro Fluke..."
+                                        className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none mb-6"
+                                        autoFocus
+                                        required
+                                    />
+                                    <div className="flex justify-end gap-3">
+                                        <button type="button" onClick={() => setNewItemModal(null)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors">Cancelar</button>
+                                        <button type="submit" className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors shadow-sm">Salvar Cadastro</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MODAL: IMPRIMIR ETIQUETA BARCODE */}
+                    {showBarcodeModal && (
+                        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+                            <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col">
+                                <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center no-print">
+                                    <h3 className="font-bold text-gray-800">Etiqueta de Equipamento</h3>
+                                    <button onClick={() => setShowBarcodeModal(null)} className="text-gray-500 hover:text-gray-800">&times;</button>
+                                </div>
+                                
+                                <div className="p-8 flex flex-col items-center justify-center bg-white print-barcode w-full h-full">
+                                    <p className="font-bold text-center text-gray-800 text-sm mb-2">{showBarcodeModal.name}</p>
+                                    <canvas id="barcode-canvas" className="max-w-full"></canvas>
+                                    <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-widest font-semibold">ODS METERING SYSTEMS</p>
+                                </div>
+
+                                <div className="p-4 bg-gray-50 border-t border-gray-200 flex justify-end no-print">
+                                    <button onClick={() => window.print()} className="px-5 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-lg font-medium transition-colors shadow-sm flex items-center gap-2">
+                                        <DownloadIcon /> Imprimir Etiqueta
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // --- ABA: CHECKLIST & IN/OUT ---
+        const ChecklistInOutForm = ({ employees, locations, serviceTypes, showMessage, logoError }) => {
+            const [empId, setEmpId] = useState('');
+            const [outDate, setOutDate] = useState(new Date().toISOString().split('T')[0]);
+            const [returnDate, setReturnDate] = useState('');
+            const [location, setLocation] = useState('');
+            const [selectedServices, setSelectedServices] = useState([]);
+            const [equipmentIn, setEquipmentIn] = useState('');
+            const [equipmentOut, setEquipmentOut] = useState('');
+            const [observations, setObservations] = useState('');
+            const [newTask, setNewTask] = useState('');
+            const [tasks, setTasks] = useState([
+                { id: 1, text: 'Verificação de EPIs Padrão', status: 'Pendente' },
+                { id: 2, text: 'Isolamento da Área de Trabalho', status: 'Pendente' },
+                { id: 3, text: 'Validação de Ferramentas / Maleta', status: 'Pendente' },
+                { id: 4, text: 'Teste de Funcionamento Inicial', status: 'Pendente' }
+            ]);
+
+            const addTask = () => {
+                if (newTask.trim() === '') return;
+                setTasks([...tasks, { id: Date.now(), text: newTask.trim(), status: 'Pendente' }]);
+                setNewTask('');
+            };
+
+            const removeTask = (id) => {
+                setTasks(tasks.filter(t => t.id !== id));
+            };
+
+            const updateTaskStatus = (id, newStatus) => {
+                setTasks(tasks.map(t => t.id === id ? { ...t, status: newStatus } : t));
+            };
+
+            const generateReportPDF = () => {
+                if (!empId || !outDate || !location || selectedServices.length === 0) {
+                    showMessage('error', 'Preencha o colaborador, local, data de saída e pelo menos 1 serviço.');
+                    return;
+                }
+                
+                showMessage('success', 'Gerando Relatório de In/Out e Checklist...');
+                const element = document.getElementById('in-out-print-area');
+                
+                const opt = {
+                    margin:       0.5,
+                    filename:     `Relatorio_InOut_${outDate}.pdf`,
+                    image:        { type: 'jpeg', quality: 0.98 },
+                    html2canvas:  { scale: 2, useCORS: true }, 
+                    jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+                };
+
+                window.html2pdf().set(opt).from(element).save().catch(err => {
+                    console.error(err);
+                    showMessage('error', 'Erro ao gerar PDF do relatório.');
+                });
+            };
+
+            const selectedEmp = employees.find(e => e.id === parseInt(empId)) || {};
+
+            return (
+                <div className="flex flex-col lg:flex-row gap-6 h-full max-w-[1400px] mx-auto w-full">
+                    
+                    {/* FORMULÁRIO DE PREENCHIMENTO */}
+                    <div className="w-full lg:w-1/2 bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col max-h-[80vh] overflow-y-auto custom-scrollbar">
+                        <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                            <ClipboardCheckIcon /> Checklist & Controle In/Out
+                        </h2>
+                        
+                        <div className="space-y-6">
+                            {/* DADOS GERAIS */}
+                            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">1. Dados do Serviço</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="md:col-span-2">
+                                        <label className="block text-xs font-medium text-gray-600 mb-1">Colaborador / Técnico</label>
+                                        <select value={empId} onChange={(e) => setEmpId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md focus:border-red-500 outline-none text-sm">
+                                            <option value="">Selecione...</option>
+                                            {employees.map(e => <option key={e.id} value={e.id}>{e.name} ({e.category})</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-600 mb-1">Data de Saída</label>
+                                        <input type="date" value={outDate} onChange={(e) => {
+                                            setOutDate(e.target.value);
+                                            if(!returnDate || e.target.value > returnDate) setReturnDate(e.target.value);
+                                        }} className="w-full p-2 border border-gray-300 rounded-md focus:border-red-500 outline-none text-sm"/>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-600 mb-1">Data de Retorno</label>
+                                        <input type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} min={outDate} className="w-full p-2 border border-gray-300 rounded-md focus:border-red-500 outline-none text-sm"/>
+                                    </div>
+                                    
+                                    {/* MÚLTIPLA SELEÇÃO DE SERVIÇOS */}
+                                    <div className="md:col-span-2">
+                                        <label className="block text-xs font-medium text-gray-600 mb-1">Tipos de Serviço (Selecione um ou mais)</label>
+                                        <select 
+                                            value="" 
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                if(val && !selectedServices.includes(val)) setSelectedServices([...selectedServices, val]);
+                                            }} 
+                                            className="w-full p-2 border border-gray-300 rounded-md focus:border-red-500 outline-none text-sm mb-2"
+                                        >
+                                            <option value="">Adicionar tipo de serviço...</option>
+                                            {serviceTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                                        </select>
+                                        {selectedServices.length > 0 && (
+                                            <div className="flex flex-wrap gap-2 mt-1">
+                                                {selectedServices.map(s => (
+                                                    <span key={s} className="bg-red-50 text-red-800 border border-red-200 text-[11px] font-semibold px-2.5 py-1 rounded flex items-center gap-1">
+                                                        {s}
+                                                        <button type="button" onClick={() => setSelectedServices(selectedServices.filter(item => item !== s))} className="text-red-500 hover:text-red-900 font-bold ml-1 transition-colors">&times;</button>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="md:col-span-2">
+                                        <label className="block text-xs font-medium text-gray-600 mb-1">Local / Cliente</label>
+                                        <select value={location} onChange={(e) => setLocation(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md focus:border-red-500 outline-none text-sm">
+                                            <option value="">Selecione a Localidade...</option>
+                                            {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* CHECKLIST */}
+                            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">2. Checklist de Verificação</h3>
+                                <div className="flex gap-2 mb-4">
+                                    <input type="text" value={newTask} onChange={(e) => setNewTask(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addTask()} placeholder="Adicionar nova tarefa..." className="flex-1 p-2 border border-gray-300 rounded-md focus:border-red-500 outline-none text-sm"/>
+                                    <button onClick={addTask} className="bg-gray-800 hover:bg-gray-900 text-white px-3 rounded-md transition-colors"><PlusIcon /></button>
+                                </div>
+                                <div className="space-y-2">
+                                    {tasks.map(t => (
+                                        <div key={t.id} className="flex justify-between items-center bg-white p-2.5 rounded border border-gray-200 shadow-sm">
+                                            <span className="text-sm font-medium text-gray-700 flex-1 truncate pr-2">{t.text}</span>
+                                            <div className="flex gap-1">
+                                                <button onClick={() => updateTaskStatus(t.id, 'OK')} className={`px-2 py-1 text-[10px] font-bold rounded ${t.status === 'OK' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>OK</button>
+                                                <button onClick={() => updateTaskStatus(t.id, 'NOK')} className={`px-2 py-1 text-[10px] font-bold rounded ${t.status === 'NOK' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>NOK</button>
+                                                <button onClick={() => updateTaskStatus(t.id, 'N/A')} className={`px-2 py-1 text-[10px] font-bold rounded ${t.status === 'N/A' ? 'bg-gray-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>N/A</button>
+                                                <button onClick={() => removeTask(t.id)} className="ml-2 text-red-400 hover:text-red-600"><TrashIcon /></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* IN / OUT */}
+                            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <div className="flex flex-col mb-3">
+                                    <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">3. Controle In / Out</h3>
+                                    {selectedServices.length > 0 && (
+                                        <p className="text-[11px] font-semibold text-red-600 mt-1 flex items-center gap-1">
+                                            Vincular a: <span className="text-gray-700 bg-red-100 px-2 py-0.5 rounded ml-1">{selectedServices.join(' | ')}</span>
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-600 mb-1 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span> IN (Entrada / Retirada)</label>
+                                        <textarea value={equipmentIn} onChange={(e) => setEquipmentIn(e.target.value)} rows="2" placeholder="Ex: Multímetro, Sensor X, Kit Ferramentas B..." className="w-full p-2 border border-gray-300 rounded-md focus:border-red-500 outline-none text-sm bg-white"></textarea>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-600 mb-1 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 inline-block"></span> OUT (Saída / Devolução)</label>
+                                        <textarea value={equipmentOut} onChange={(e) => setEquipmentOut(e.target.value)} rows="2" placeholder="Ex: Peça danificada, Kit devolvido completo..." className="w-full p-2 border border-gray-300 rounded-md focus:border-red-500 outline-none text-sm bg-white"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* OBSERVAÇÕES */}
+                            <div>
+                                <label className="block text-xs font-bold text-gray-600 mb-1">Observações Adicionais</label>
+                                <textarea value={observations} onChange={(e) => setObservations(e.target.value)} rows="2" className="w-full p-2 border border-gray-300 rounded-md focus:border-red-500 outline-none text-sm bg-gray-50"></textarea>
+                            </div>
+                            
+                            <button onClick={generateReportPDF} className="w-full ods-red-bg ods-red-bg-hover text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors flex items-center justify-center gap-2 mt-4">
+                                <DownloadIcon /> Gerar Relatório PDF
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* PRÉ-VISUALIZAÇÃO DO DOCUMENTO (DOCUMENTO A4) */}
+                    <div className="w-full lg:w-1/2 flex justify-center bg-gray-200 p-4 rounded-xl overflow-y-auto max-h-[80vh] custom-scrollbar shadow-inner">
+                        {/* A4 Wrapper (210 x 297 proporção) */}
+                        <div id="in-out-print-area" className="bg-white shadow-lg w-full max-w-[700px] h-fit p-8 text-black text-sm border border-gray-300 relative">
+                            {/* Document Header */}
+                            <div className="flex justify-between items-center border-b-2 ods-red-border pb-4 mb-6">
+                                {!logoError ? (
+                                    <img src="https://ods-metering.com/wp-content/uploads/2024/09/ODS-METERING-SYSTEMS-LOGO-V2.png" alt="ODS Logo" className="h-10" />
+                                ) : (
+                                    <div className="flex items-center">
+                                        <span className="text-red-600 font-black text-2xl italic tracking-tighter">ODS</span>
+                                        <span className="text-gray-800 font-bold text-[10px] leading-tight ml-1.5 border-l border-gray-400 pl-1.5">METERING<br/>SYSTEMS</span>
+                                    </div>
+                                )}
+                                <div className="text-right">
+                                    <h1 className="text-lg font-black text-gray-800 uppercase tracking-wide">Relatório de Serviço</h1>
+                                    <p className="text-xs text-red-600 font-bold uppercase tracking-wider">Checklist & In/Out</p>
+                                </div>
+                            </div>
+
+                            {/* Section 1: Info */}
+                            <div className="mb-6 grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded border border-gray-200">
+                                <div className="col-span-2"><span className="font-bold text-gray-600 text-xs uppercase block mb-0.5">Técnico / Colaborador</span><span className="font-medium text-base">{selectedEmp.name || 'Não selecionado'}</span> {selectedEmp.category && <span className="text-xs ml-1 bg-gray-200 px-1 rounded">{selectedEmp.category}</span>}</div>
+                                <div><span className="font-bold text-gray-600 text-xs uppercase block mb-0.5">Data Saída</span><span className="font-medium text-sm">{formatDateBR(outDate)}</span></div>
+                                <div><span className="font-bold text-gray-600 text-xs uppercase block mb-0.5">Data Retorno</span><span className="font-medium text-sm">{returnDate ? formatDateBR(returnDate) : '-'}</span></div>
+                                <div className="col-span-2"><span className="font-bold text-gray-600 text-xs uppercase block mb-0.5">Localidade / Cliente</span><span className="font-medium text-sm">{location || 'Não informado'}</span></div>
+                            </div>
+
+                            {/* Section 2: In / Out */}
+                            <div className="mb-6">
+                                <h3 className="font-bold text-gray-800 text-sm uppercase border-b border-gray-300 pb-1 mb-3 flex flex-col sm:flex-row justify-between sm:items-end gap-1">
+                                    <span>Controle de Materiais (IN / OUT)</span>
+                                    {selectedServices.length > 0 && <span className="text-[10px] font-semibold text-red-600">Serviço(s): {selectedServices.join(', ')}</span>}
+                                </h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="border border-blue-200 rounded overflow-hidden">
+                                        <div className="bg-blue-100 text-blue-800 font-bold text-xs uppercase p-2 border-b border-blue-200 flex items-center gap-2">
+                                            <span className="w-2 h-2 rounded-full bg-blue-600 inline-block"></span> IN (Entrada / Retirada)
+                                        </div>
+                                        <div className="p-3 text-gray-700 min-h-[4rem] whitespace-pre-wrap">{equipmentIn || '- Nenhum item reportado -'}</div>
+                                    </div>
+                                    <div className="border border-orange-200 rounded overflow-hidden">
+                                        <div className="bg-orange-100 text-orange-800 font-bold text-xs uppercase p-2 border-b border-orange-200 flex items-center gap-2">
+                                            <span className="w-2 h-2 rounded-full bg-orange-600 inline-block"></span> OUT (Saída / Devolução)
+                                        </div>
+                                        <div className="p-3 text-gray-700 min-h-[4rem] whitespace-pre-wrap">{equipmentOut || '- Nenhum item reportado -'}</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Section 3: Checklist */}
+                            <div className="mb-6">
+                                <h3 className="font-bold text-gray-800 text-sm uppercase border-b border-gray-300 pb-1 mb-3">Checklist de Verificação Operacional</h3>
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-gray-100 text-gray-600 text-[10px] uppercase">
+                                            <th className="p-2 border border-gray-200 w-[65%]">Item Verificado / Tarefa</th>
+                                            <th className="p-2 border border-gray-200 text-center w-[35%]">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {tasks.length > 0 ? tasks.map(t => (
+                                            <tr key={t.id}>
+                                                <td className="p-2 border border-gray-200 text-xs font-medium text-gray-700">{t.text}</td>
+                                                <td className="p-2 border border-gray-200 text-center">
+                                                    {t.status === 'OK' && <span className="text-green-600 font-bold text-xs">✓ OK</span>}
+                                                    {t.status === 'NOK' && <span className="text-red-600 font-bold text-xs">✗ NOK</span>}
+                                                    {t.status === 'N/A' && <span className="text-gray-500 font-bold text-xs">- N/A -</span>}
+                                                    {t.status === 'Pendente' && <span className="text-gray-400 font-medium text-xs border border-dashed border-gray-300 px-2 rounded">Pendente</span>}
+                                                </td>
+                                            </tr>
+                                        )) : (
+                                            <tr><td colSpan="2" className="p-4 text-center text-gray-400 text-xs italic">Nenhum item na lista de verificação.</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Section 4: Obs */}
+                            <div className="mb-10">
+                                <h3 className="font-bold text-gray-800 text-sm uppercase border-b border-gray-300 pb-1 mb-2">Observações</h3>
+                                <div className="p-3 bg-gray-50 border border-gray-200 rounded min-h-[3rem] text-xs text-gray-700 whitespace-pre-wrap">
+                                    {observations || '- Nenhuma observação adicional -'}
+                                </div>
+                            </div>
+
+                            {/* Signatures */}
+                            <div className="grid grid-cols-2 gap-8 mt-12 pt-8 border-t border-dashed border-gray-300">
+                                <div className="text-center">
+                                    <div className="border-b border-gray-800 w-3/4 mx-auto mb-2"></div>
+                                    <p className="text-xs font-bold text-gray-800 uppercase">{selectedEmp.name || 'Assinatura do Técnico'}</p>
+                                    <p className="text-[10px] text-gray-500">ODS Metering Systems</p>
+                                </div>
+                                <div className="text-center">
+                                    <div className="border-b border-gray-800 w-3/4 mx-auto mb-2"></div>
+                                    <p className="text-xs font-bold text-gray-800 uppercase">Assinatura Cliente / Responsável</p>
+                                    <p className="text-[10px] text-gray-500">{location || 'Local'}</p>
+                                </div>
+                            </div>
+                            
+                            {/* Footer */}
+                            <div className="absolute bottom-4 left-0 w-full text-center text-[9px] text-gray-400">
+                                Documento gerado pelo Sistema Operacional ODS Metering em {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ConfigView = ({ serviceTypes, locations, dayOffReasons, updateSettings, showMessage }) => {
+            const [newService, setNewService] = useState('');
+            const [newLocation, setNewLocation] = useState('');
+            const [newReason, setNewReason] = useState('');
+
+            const handleAdd = (type) => {
+                if (type === 'service' && newService.trim()) {
+                    if(serviceTypes.includes(newService.trim())) return showMessage('error', 'Item já existe!');
+                    updateSettings('serviceTypes', [...serviceTypes, newService.trim()]);
+                    setNewService('');
+                    showMessage('success', 'Tipo de serviço adicionado!');
+                } else if (type === 'location' && newLocation.trim()) {
+                    if(locations.includes(newLocation.trim())) return showMessage('error', 'Item já existe!');
+                    updateSettings('locations', [...locations, newLocation.trim()]);
+                    setNewLocation('');
+                    showMessage('success', 'Local adicionado!');
+                } else if (type === 'reason' && newReason.trim()) {
+                    if(dayOffReasons.includes(newReason.trim())) return showMessage('error', 'Item já existe!');
+                    updateSettings('dayOffReasons', [...dayOffReasons, newReason.trim()]);
+                    setNewReason('');
+                    showMessage('success', 'Tipo de folga adicionado!');
+                }
+            };
+
+            const handleRemove = (type, item) => {
+                if (type === 'service') {
+                    updateSettings('serviceTypes', serviceTypes.filter(i => i !== item));
+                } else if (type === 'location') {
+                    updateSettings('locations', locations.filter(i => i !== item));
+                } else if (type === 'reason') {
+                    updateSettings('dayOffReasons', dayOffReasons.filter(i => i !== item));
+                }
+                showMessage('success', 'Item removido!');
+            };
+
+            const renderList = (title, items, type, value, setValue) => (
+                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col h-full min-h-[300px]">
+                    <h3 className="font-bold text-gray-800 mb-4">{title}</h3>
+                    
+                    <div className="flex gap-2 mb-4">
+                        <input 
+                            type="text" 
+                            value={value} 
+                            onChange={(e) => setValue(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleAdd(type)}
+                            placeholder="Adicionar novo..."
+                            className="flex-1 p-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none text-sm"
+                        />
+                        <button onClick={() => handleAdd(type)} className="ods-red-bg ods-red-bg-hover text-white p-2 rounded-lg transition-colors flex items-center justify-center min-w-[40px]">
+                            <PlusIcon />
+                        </button>
+                    </div>
+
+                    <ul className="flex-1 overflow-y-auto pr-2 space-y-2 hide-scrollbar">
+                        {items.map((item, idx) => (
+                            <li key={idx} className="flex justify-between items-center bg-gray-50 p-2.5 rounded-lg text-sm border border-gray-100">
+                                <span className="text-gray-700 truncate mr-2" title={item}>{item}</span>
+                                <button onClick={() => handleRemove(type, item)} className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors flex-shrink-0">
+                                    <TrashIcon />
+                                </button>
+                            </li>
+                        ))}
+                        {items.length === 0 && <li className="text-sm text-gray-500 text-center py-2">Nenhum item cadastrado</li>}
+                    </ul>
+                </div>
+            );
+
+            return (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
+                    {renderList('Tipos de Serviço', serviceTypes, 'service', newService, setNewService)}
+                    {renderList('Locais do Serviço', locations, 'location', newLocation, setNewLocation)}
+                    {renderList('Tipos de Folga', dayOffReasons, 'reason', newReason, setNewReason)}
+                </div>
+            );
+        };
+
+        // --- COMPONENTE DE MODAL (DETALHES E EDIÇÃO) ---
+        const DetailsModal = ({ selectedItem, setSelectedItem, deleteItem, handleEdit, serviceTypes, locations, dayOffReasons }) => {
+            const [isEditing, setIsEditing] = useState(false);
+            const [editData, setEditData] = useState({});
+
+            useEffect(() => {
+                setIsEditing(false);
+                if (selectedItem) {
+                    setEditData({
+                        description: selectedItem.description || '',
+                        reason: selectedItem.reason || '',
+                        serviceType: selectedItem.serviceType || '',
+                        location: selectedItem.location || ''
+                    });
+                }
+            }, [selectedItem]);
+
+            if (!selectedItem) return null;
+
+            const onSaveEdit = () => {
+                handleEdit(selectedItem, editData);
+                setIsEditing(false);
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all flex flex-col max-h-[90vh]">
+                        <div className={`p-4 text-white flex justify-between items-center ${selectedItem.isDayOff ? 'status-dayoff-bg' : selectedItem.sector === 'Service' ? 'status-service-bg' : 'status-lab-bg'}`}>
+                            <h3 className="font-bold text-lg flex items-center gap-2">
+                                {selectedItem.isDayOff ? <CalendarIcon /> : <ListIcon />}
+                                {selectedItem.isDayOff ? 'Detalhes da Folga' : 'Detalhes da Atividade'}
+                            </h3>
+                            <div className="flex gap-2">
+                                {!isEditing && (
+                                    <button onClick={() => setIsEditing(true)} className="bg-white/20 hover:bg-white/40 text-white px-2 py-1 rounded text-xs font-bold transition flex items-center gap-1">
+                                        <EditIcon /> Editar
+                                    </button>
+                                )}
+                                <button onClick={() => setSelectedItem(null)} className="text-white/80 hover:text-white transition-colors ml-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold mb-1">Colaborador</p>
+                                    <p className="font-medium text-gray-800">{selectedItem.employee.name}</p>
+                                    <p className="text-sm text-gray-500">{selectedItem.employee.category}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold mb-1">Período</p>
+                                    <p className="font-medium text-gray-800 bg-gray-100 inline-block px-3 py-1 rounded-md border border-gray-200">
+                                        {(selectedItem.span && selectedItem.span > 1) || (selectedItem.endDateStr && selectedItem.endDateStr !== selectedItem.date) 
+                                            ? `${formatDateBR(selectedItem.date)} a ${formatDateBR(selectedItem.endDateStr)}` 
+                                            : formatDateBR(selectedItem.date)}
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            {!selectedItem.isDayOff ? (
+                                <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 space-y-3">
+                                    <div>
+                                        <p className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold mb-1">Tipo de Serviço</p>
+                                        {isEditing ? (
+                                            <select value={editData.serviceType} onChange={e => setEditData({...editData, serviceType: e.target.value})} className="w-full p-2 border border-gray-300 rounded text-sm focus:border-red-500 outline-none">
+                                                <option value="">Selecione...</option>
+                                                {serviceTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                                            </select>
+                                        ) : (
+                                            <p className="font-medium text-gray-800">{selectedItem.serviceType}</p>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <p className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold mb-1">Localidade</p>
+                                        {isEditing ? (
+                                            <select value={editData.location} onChange={e => setEditData({...editData, location: e.target.value})} className="w-full p-2 border border-gray-300 rounded text-sm focus:border-red-500 outline-none">
+                                                <option value="">Selecione...</option>
+                                                {locations.map(l => <option key={l} value={l}>{l}</option>)}
+                                            </select>
+                                        ) : (
+                                            <p className="text-sm font-medium text-gray-800 flex items-center gap-1">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                                                {selectedItem.location}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="bg-orange-50 p-4 rounded-lg border border-orange-100">
+                                    <p className="text-[11px] uppercase tracking-wider text-orange-600 font-semibold mb-1">Motivo da Folga</p>
+                                    {isEditing ? (
+                                        <select value={editData.reason} onChange={e => setEditData({...editData, reason: e.target.value})} className="w-full p-2 border border-orange-300 rounded text-sm focus:border-orange-500 outline-none">
+                                            <option value="">Selecione...</option>
+                                            {dayOffReasons.map(r => <option key={r} value={r}>{r}</option>)}
+                                        </select>
+                                    ) : (
+                                        <p className="font-medium text-orange-900">{selectedItem.reason}</p>
+                                    )}
+                                </div>
+                            )}
+                            
+                            {!selectedItem.isDayOff && (
+                                <div>
+                                    <p className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold mb-1">Descrição / Motivo</p>
+                                    {isEditing ? (
+                                        <textarea 
+                                            value={editData.description} 
+                                            onChange={(e) => setEditData({...editData, description: e.target.value})} 
+                                            className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all" 
+                                            rows="3"
+                                        />
+                                    ) : (
+                                        <p className="font-medium text-gray-800 text-sm bg-white border border-gray-200 p-3 rounded-lg shadow-inner min-h-[3rem] whitespace-pre-wrap">{selectedItem.description}</p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-between gap-3 items-center">
+                            {isEditing ? (
+                                <>
+                                    <button onClick={() => setIsEditing(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-lg font-medium transition-colors">Cancelar</button>
+                                    <button onClick={onSaveEdit} className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors shadow-sm">Salvar Alterações</button>
+                                </>
+                            ) : (
+                                <>
+                                    <button onClick={() => { deleteItem(selectedItem.isDayOff ? 'dayOff' : 'activity', selectedItem.spanIds || selectedItem.id); setSelectedItem(null); }} className="px-3 py-1.5 bg-red-50 hover:bg-red-500 text-red-600 hover:text-white border border-red-200 hover:border-red-500 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-sm">
+                                        <TrashIcon /> Excluir
+                                    </button>
+                                    <button onClick={() => setSelectedItem(null)} className="px-5 py-1.5 text-gray-700 bg-white border border-gray-300 hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors shadow-sm">Fechar</button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- TELAS ---
+        const AgendaView = ({ activities, daysOff, employees, currentDate, setCurrentDate, selectedItem, setSelectedItem, showMessage, handleImportCSV }) => {
+            const [filterSector, setFilterSector] = useState('');
+            const [filterEmployee, setFilterEmployee] = useState('');
+            const fileInputRef = useRef(null);
+
+            const year = currentDate.getFullYear();
+            const monthsArray = Array.from({ length: 12 }, (_, i) => i);
+            const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+            const prevYear = () => setCurrentDate(new Date(year - 1, 0, 1));
+            const nextYear = () => setCurrentDate(new Date(year + 1, 0, 1));
+
+            // Matriz de todos os dias do ano (365 dias)
+            const allDays = useMemo(() => {
+                const days = [];
+                for (let m = 0; m < 12; m++) {
+                    const dInM = new Date(year, m + 1, 0).getDate();
+                    for (let d = 1; d <= dInM; d++) {
+                        const dateStr = `${year}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                        const isWeekend = new Date(year, m, d).getDay() === 0 || new Date(year, m, d).getDay() === 6;
+                        days.push({ month: m, day: d, dateStr, isWeekend });
+                    }
+                }
+                return days;
+            }, [year]);
+
+            const combinedAgenda = useMemo(() => {
+                let items = [];
+                activities.forEach(a => items.push({...a, isDayOff: false}));
+                daysOff.forEach(d => items.push({...d, isDayOff: true, description: d.reason}));
+                return items;
+            }, [activities, daysOff]);
+
+            // Mapa para otimização extrema de performance O(1)
+            const agendaMap = useMemo(() => {
+                const map = {};
+                combinedAgenda.forEach(act => {
+                    map[`${act.employeeId}-${act.date}`] = act;
+                });
+                return map;
+            }, [combinedAgenda]);
+
+            const filteredEmployees = useMemo(() => {
+                return employees.filter(emp => {
+                    const matchSector = filterSector ? emp.category === filterSector : true;
+                    const matchEmployee = filterEmployee ? emp.id === parseInt(filterEmployee) : true;
+                    return matchSector && matchEmployee;
+                });
+            }, [employees, filterSector, filterEmployee]);
+
+            const exportToExcel = () => {
+                showMessage('success', 'Preparando Excel, aguarde...');
+                const header = ['Colaborador', 'Setor', ...allDays.map(d => `${d.day}/${d.month + 1}`)];
+                const data = [header];
+
+                filteredEmployees.forEach(emp => {
+                    const row = [emp.name, emp.category];
+                    allDays.forEach(day => {
+                        const act = agendaMap[`${emp.id}-${day.dateStr}`];
+                        if (act) {
+                            if (act.isDayOff) row.push(`Folga (${act.description})`);
+                            else row.push(`${act.sector} - ${act.serviceType}`);
+                        } else {
+                            row.push(''); 
+                        }
+                    });
+                    data.push(row);
+                });
+
+                setTimeout(() => {
+                    const ws = XLSX.utils.aoa_to_sheet(data);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, `Escala ${year}`);
+                    XLSX.writeFile(wb, `Escala_Completa_${year}.xlsx`);
+                }, 100);
+            };
+
+            const downloadImportTemplate = () => {
+                const header = ['Colaborador', 'Tipo (Atividade/Folga)', 'Data Inicio', 'Data Fim', 'Tipo Servico', 'Localidade', 'Descricao', 'Motivo'];
+                const demoData = [
+                    ['Marcio Martirios', 'Atividade', '2026-05-10', '2026-05-12', 'Instalação', 'Filial Norte', 'Instalação de equipamento X', ''],
+                    ['Phamela Carvalho', 'Folga', '2026-05-15', '2026-05-15', '', '', '', 'Férias']
+                ];
+                const ws = XLSX.utils.aoa_to_sheet([header, ...demoData]);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, `Modelo`);
+                XLSX.writeFile(wb, `Modelo_Importacao_ODS.xlsx`);
+                showMessage('success', 'Planilha modelo transferida! Preencha as colunas e use o botão "Importar".');
+            };
+
+            const onFileChange = (e) => {
+                const file = e.target.files[0];
+                if(file) handleImportCSV(file);
+                e.target.value = null; 
+            };
+
+            const exportToPDF = () => {
+                showMessage('success', 'Gerando PDF panorâmico, por favor aguarde...');
+                const element = document.getElementById('print-area-agenda');
+                const originalOverflow = element.style.overflow;
+                element.style.overflow = 'visible';
+
+                const opt = {
+                    margin:       0.2,
+                    filename:     `Escala_Completa_${year}.pdf`,
+                    image:        { type: 'jpeg', quality: 0.98 },
+                    html2canvas:  { scale: 2, windowWidth: element.scrollWidth }, 
+                    jsPDF:        { unit: 'in', format: 'a3', orientation: 'landscape' }
+                };
+
+                window.html2pdf().set(opt).from(element).save().then(() => {
+                    element.style.overflow = originalOverflow;
+                }).catch(err => {
+                    console.error(err);
+                    showMessage('error', 'Erro ao gerar PDF.');
+                    element.style.overflow = originalOverflow;
+                });
+            };
+
+            useEffect(() => {
+                const container = document.getElementById('print-area-agenda');
+                if (container) {
+                    const monthIndex = currentDate.getMonth();
+                    const targetScroll = (monthIndex * 30 * 40) + 150; 
+                    container.scrollLeft = targetScroll - 200;
+                }
+            }, [currentDate]);
+
+            return (
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col h-full">
+                    <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                            <CalendarIcon /> Painel de Escala Contínuo
+                        </h2>
+                        
+                        <div className="flex items-center gap-4 bg-gray-50 p-2 rounded-lg border border-gray-200">
+                            <button onClick={prevYear} className="p-1.5 hover:bg-white hover:shadow-sm rounded text-gray-600 transition-all font-medium text-xs">&lt; Ano Ant.</button>
+                            <span className="font-bold text-gray-800 min-w-[80px] text-center tracking-wide text-lg">{year}</span>
+                            <button onClick={nextYear} className="p-1.5 hover:bg-white hover:shadow-sm rounded text-gray-600 transition-all font-medium text-xs">Próx. Ano &gt;</button>
+                        </div>
+
+                        <div className="flex gap-3 text-xs md:text-sm font-medium bg-gray-50 py-2 px-3 rounded-lg border border-gray-100 no-print">
+                            <div className="flex items-center gap-1.5"><span className="w-3 h-3 status-service-legend-bg rounded-full shadow-sm"></span> Service</div>
+                            <div className="flex items-center gap-1.5"><span className="w-3 h-3 status-lab-legend-bg rounded-full shadow-sm"></span> Lab</div>
+                            <div className="flex items-center gap-1.5"><span className="w-3 h-3 status-dayoff-legend-bg rounded-full shadow-sm"></span> Folga</div>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col md:flex-row justify-between gap-4 bg-gray-50 p-2 rounded-lg border border-gray-200 mb-4 no-print">
+                        <div className="flex flex-col md:flex-row gap-4">
+                            <div className="flex items-center gap-2">
+                                <label className="text-sm font-medium text-gray-700">Setor:</label>
+                                <select 
+                                    value={filterSector} 
+                                    onChange={(e) => { setFilterSector(e.target.value); setFilterEmployee(''); }}
+                                    className="p-1.5 bg-white border border-gray-300 rounded-md text-sm outline-none focus:ring-2 focus:ring-red-500 transition-all"
+                                >
+                                    <option value="">Todos</option>
+                                    <option value="Service">Service</option>
+                                    <option value="Lab">Lab</option>
+                                </select>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <label className="text-sm font-medium text-gray-700">Colaborador:</label>
+                                <select 
+                                    value={filterEmployee} 
+                                    onChange={(e) => setFilterEmployee(e.target.value)}
+                                    className="p-1.5 bg-white border border-gray-300 rounded-md text-sm outline-none focus:ring-2 focus:ring-red-500 transition-all"
+                                >
+                                    <option value="">Todos</option>
+                                    {employees
+                                        .filter(e => filterSector ? e.category === filterSector : true)
+                                        .map(e => <option key={e.id} value={e.id}>{e.name}</option>)
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div className="flex flex-wrap items-center gap-2 border-t md:border-t-0 md:border-l border-gray-200 pt-2 md:pt-0 md:pl-4">
+                            
+                            {/* Bloco de Importação */}
+                            <div className="flex bg-blue-50 rounded-md border border-blue-200 overflow-hidden mr-2">
+                                <button onClick={downloadImportTemplate} title="Baixar Modelo de Planilha" className="flex items-center gap-1 bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1.5 text-xs font-medium transition-colors border-r border-blue-200">
+                                    <DownloadIcon /> Modelo
+                                </button>
+                                <button onClick={() => fileInputRef.current.click()} className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 text-sm font-medium transition-colors">
+                                    <UploadIcon /> Importar Dados
+                                </button>
+                                <input type="file" ref={fileInputRef} onChange={onFileChange} className="hidden" accept=".csv, .xlsx, .xls" />
+                            </div>
+
+                            <button onClick={exportToExcel} className="flex items-center gap-1 bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors shadow-sm">
+                                <DownloadIcon /> Excel
+                            </button>
+                            <button onClick={exportToPDF} className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors shadow-sm">
+                                <DownloadIcon /> PDF
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* GRÁFICO DE GANTT HORIZONTAL CONTÍNUO (365 Dias) */}
+                    <div id="print-area-agenda" className="flex-1 overflow-auto max-h-[70vh] border border-gray-200 rounded-lg shadow-inner bg-white custom-scrollbar relative w-full">
+                        <table className="text-left border-collapse min-w-max w-full">
+                            <thead className="sticky top-0 z-40 bg-gray-100 shadow-[0_2px_5px_rgba(0,0,0,0.05)]">
+                                <tr className="text-gray-600 text-[10px] uppercase tracking-wider">
+                                    <th rowSpan="2" className="sticky left-0 top-0 bg-gray-200 p-2 border-b border-r border-gray-300 z-50 w-[150px] min-w-[150px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] align-middle">
+                                        Colaborador
+                                    </th>
+                                    {monthsArray.map(m => {
+                                        const daysInMonth = new Date(year, m + 1, 0).getDate();
+                                        return (
+                                            <th key={m} colSpan={daysInMonth} className="p-1 border-b border-r border-gray-300 text-center font-bold bg-gray-200 text-[11px] text-gray-800">
+                                                {monthNames[m]}
+                                            </th>
+                                        );
+                                    })}
+                                </tr>
+                                <tr className="text-gray-600 text-[9px] bg-gray-100">
+                                    {allDays.map((dayObj, i) => (
+                                        <th key={i} className={`p-0.5 border-b border-r border-gray-200 text-center font-semibold w-10 min-w-[2.5rem] max-w-[2.5rem] ${dayObj.isWeekend ? 'bg-gray-300 text-gray-600' : ''}`}>
+                                            {dayObj.day}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredEmployees.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={allDays.length + 1} className="p-8 text-center text-gray-500">
+                                            Nenhum colaborador encontrado.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    filteredEmployees.map((emp) => {
+                                        const cells = [];
+                                        let dIndex = 0;
+                                        
+                                        while (dIndex < allDays.length) {
+                                            const currentDay = allDays[dIndex];
+                                            const act = agendaMap[`${emp.id}-${currentDay.dateStr}`];
+
+                                            if (act) {
+                                                let span = 1;
+                                                let nextDIndex = dIndex + 1;
+                                                let spanIds = [act.id];
+
+                                                while (nextDIndex < allDays.length) {
+                                                    const nextDay = allDays[nextDIndex];
+                                                    const nextAct = agendaMap[`${emp.id}-${nextDay.dateStr}`];
+                                                    
+                                                    if (nextAct && 
+                                                        nextAct.isDayOff === act.isDayOff &&
+                                                        nextAct.sector === act.sector &&
+                                                        nextAct.serviceType === act.serviceType &&
+                                                        nextAct.location === act.location &&
+                                                        nextAct.description === act.description) {
+                                                        span++;
+                                                        spanIds.push(nextAct.id);
+                                                        nextDIndex++;
+                                                    } else {
+                                                        break;
+                                                    }
+                                                }
+                                                const endDateStr = allDays[nextDIndex - 1].dateStr;
+                                                cells.push({ type: 'activity', day: currentDay, span, act: { ...act, spanIds, endDateStr } });
+                                                dIndex = nextDIndex;
+                                            } else {
+                                                cells.push({ type: 'empty', day: currentDay, span: 1 });
+                                                dIndex++;
+                                            }
+                                        }
+
+                                        return (
+                                            <tr key={emp.id} className="border-b border-gray-100 hover:bg-gray-50/50 group">
+                                                <td className="sticky left-0 bg-white group-hover:bg-gray-50 p-1.5 text-xs border-r border-gray-300 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] transition-colors truncate w-[150px] min-w-[150px]">
+                                                    <div className="font-semibold text-gray-800 truncate leading-tight">{emp.name}</div>
+                                                    <div className="text-[9px] text-gray-500 uppercase tracking-wide leading-tight">{emp.category}</div>
+                                                </td>
+                                                {cells.map(cell => {
+                                                    if (cell.type === 'empty') {
+                                                        return <td key={cell.day.dateStr} className={`p-0 border-r border-gray-100 text-center relative ${cell.day.isWeekend ? 'bg-gray-50' : ''}`}></td>
+                                                    } else {
+                                                        const act = cell.act;
+                                                        let bgClass = "bg-transparent text-white";
+                                                        
+                                                        if (act.isDayOff) bgClass = "status-dayoff-bg status-dayoff-bg-hover status-dayoff-border";
+                                                        else if (act.sector === 'Service') bgClass = "status-service-bg status-service-bg-hover status-service-border";
+                                                        else bgClass = "status-lab-bg status-lab-bg-hover status-lab-border";
+
+                                                        return (
+                                                            <td key={cell.day.dateStr} colSpan={cell.span} className="p-[2px] border-r border-gray-100 relative">
+                                                                <div 
+                                                                    onClick={() => setSelectedItem({ ...act, employee: emp })}
+                                                                    className={`w-full h-8 rounded-[4px] px-1.5 shadow-sm cursor-pointer transition-all flex flex-col justify-center overflow-hidden border whitespace-nowrap ${bgClass}`}
+                                                                    title={act.isDayOff ? `Folga - ${act.description}` : `${act.location} \n${act.serviceType}\n${act.description}`}
+                                                                >
+                                                                    {act.isDayOff ? (
+                                                                        <div className="font-bold text-[9px] truncate w-full flex items-center justify-center tracking-wider">
+                                                                            FOLGA
+                                                                        </div>
+                                                                    ) : (
+                                                                        <>
+                                                                            <div className="font-bold text-[10px] leading-[1.1] truncate w-full">{act.location}</div>
+                                                                            <div className="text-[8px] leading-[1.1] opacity-90 truncate w-full">{act.serviceType}</div>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                        );
+                                                    }
+                                                })}
+                                            </tr>
+                                        );
+                                    })
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        };
+
+        const ActivityForm = ({ handleSaveActivities, daysOff, employees, showMessage, serviceTypes, locations, setActiveTab, setCurrentDate }) => {
+            const [sector, setSector] = useState('Service');
+            const [startDate, setStartDate] = useState('');
+            const [endDate, setEndDate] = useState('');
+            const [empId, setEmpId] = useState('');
+            const [serviceType, setServiceType] = useState('');
+            const [location, setLocation] = useState('');
+            const [desc, setDesc] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!startDate || !endDate || !empId || !serviceType || !location || !desc) {
+                    showMessage('error', 'Por favor, preencha todos os campos.');
+                    return;
+                }
+
+                if (parseInt(startDate.split('-')[0]) < 2023) {
+                    showMessage('error', 'A data selecionada não pode ser anterior ao ano de 2023.');
+                    return;
+                }
+
+                if (new Date(startDate) > new Date(endDate)) {
+                    showMessage('error', 'A data final deve ser maior ou igual à data inicial.');
+                    return;
+                }
+
+                const dates = getDatesInRange(startDate, endDate);
+                const hasConflict = daysOff.some(d => d.employeeId === parseInt(empId) && dates.includes(d.date));
+                
+                if (hasConflict) {
+                    showMessage('error', 'Conflito! Este colaborador possui FOLGA em um ou mais dias do período selecionado.');
+                    return;
+                }
+
+                const newActivities = dates.map((date, index) => ({
+                    id: Date.now() + index,
+                    date,
+                    employeeId: parseInt(empId),
+                    sector,
+                    serviceType,
+                    location,
+                    description: desc
+                }));
+
+                handleSaveActivities(newActivities, startDate);
+                
+                setDesc('');
+                setStartDate('');
+                setEndDate('');
+                setEmpId('');
+                setServiceType('');
+                setLocation('');
+            };
+
+            return (
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 max-w-2xl mx-auto">
+                    <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                        <PlusIcon /> Nova Atividade na Agenda
+                    </h2>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Setor</label>
+                                <div className="flex gap-4 p-2.5 bg-gray-50 border border-gray-300 rounded-lg">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="sector" value="Service" checked={sector === 'Service'} onChange={(e) => { setSector(e.target.value); setEmpId(''); }} className="w-4 h-4 ods-red-text focus:ring-red-500"/>
+                                        <span className="text-gray-700 text-sm">Service</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="sector" value="Lab" checked={sector === 'Lab'} onChange={(e) => { setSector(e.target.value); setEmpId(''); }} className="w-4 h-4 ods-red-text focus:ring-red-500"/>
+                                        <span className="text-gray-700 text-sm">Lab</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Colaborador</label>
+                                <select 
+                                    value={empId} 
+                                    onChange={(e) => setEmpId(e.target.value)}
+                                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all"
+                                >
+                                    <option value="">Selecione...</option>
+                                    {employees.filter(e => e.category === sector).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Data de Início</label>
+                                <input 
+                                    type="date" 
+                                    value={startDate} 
+                                    onChange={(e) => {
+                                        setStartDate(e.target.value);
+                                        if(!endDate || e.target.value > endDate) setEndDate(e.target.value);
+                                    }}
+                                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Data de Fim</label>
+                                <input 
+                                    type="date" 
+                                    value={endDate} 
+                                    min={startDate}
+                                    onChange={(e) => setEndDate(e.target.value)}
+                                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Serviço</label>
+                                <select 
+                                    value={serviceType} 
+                                    onChange={(e) => setServiceType(e.target.value)}
+                                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all"
+                                >
+                                    <option value="">Selecione...</option>
+                                    {serviceTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Localidade do Serviço</label>
+                                <select 
+                                    value={location} 
+                                    onChange={(e) => setLocation(e.target.value)}
+                                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all"
+                                >
+                                    <option value="">Selecione...</option>
+                                    {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Descrição Detalhada / Tarefa</label>
+                            <input 
+                                type="text" 
+                                value={desc} 
+                                onChange={(e) => setDesc(e.target.value)}
+                                placeholder="Ex: Troca de componentes da máquina principal..."
+                                className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all"
+                            />
+                        </div>
+
+                        <div className="pt-4 border-t border-gray-100 flex justify-end">
+                            <button type="submit" className="ods-red-bg ods-red-bg-hover text-white font-medium py-2.5 px-6 rounded-lg shadow-sm transition-colors flex items-center gap-2">
+                                Salvar Atividade
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            );
+        };
+
+        const DayOffForm = ({ handleSaveDaysOff, activities, employees, showMessage, dayOffReasons, setActiveTab, setCurrentDate }) => {
+            const [startDate, setStartDate] = useState('');
+            const [endDate, setEndDate] = useState('');
+            const [empId, setEmpId] = useState('');
+            const [reason, setReason] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!startDate || !endDate || !empId || !reason) {
+                    showMessage('error', 'Preencha colaborador, motivo e as datas.');
+                    return;
+                }
+
+                if (parseInt(startDate.split('-')[0]) < 2023) {
+                    showMessage('error', 'A data selecionada não pode ser anterior ao ano de 2023.');
+                    return;
+                }
+
+                if (new Date(startDate) > new Date(endDate)) {
+                    showMessage('error', 'A data final deve ser maior ou igual à data inicial.');
+                    return;
+                }
+
+                const dates = getDatesInRange(startDate, endDate);
+
+                const hasActivity = activities.some(a => a.employeeId === parseInt(empId) && dates.includes(a.date));
+                if (hasActivity) {
+                    showMessage('error', 'Atenção! Este colaborador já possui atividades agendadas em um ou mais dias deste período. Remova as atividades primeiro.');
+                    return;
+                }
+
+                const newDaysOff = dates.map((date, index) => ({
+                    id: Date.now() + index,
+                    date,
+                    employeeId: parseInt(empId),
+                    reason
+                }));
+
+                handleSaveDaysOff(newDaysOff, startDate);
+                
+                setStartDate('');
+                setEndDate('');
+                setEmpId('');
+            };
+
+            return (
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 max-w-2xl mx-auto">
+                    <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                        <CalendarIcon /> Registrar Folga (Day Off)
+                    </h2>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Colaborador</label>
+                                <select 
+                                    value={empId} 
+                                    onChange={(e) => setEmpId(e.target.value)}
+                                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all"
+                                >
+                                    <option value="">Selecione...</option>
+                                    <optgroup label="Service">
+                                        {employees.filter(e => e.category === 'Service').map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                    </optgroup>
+                                    <optgroup label="Lab">
+                                        {employees.filter(e => e.category === 'Lab').map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                    </optgroup>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Data de Início</label>
+                                <input 
+                                    type="date" 
+                                    value={startDate} 
+                                    onChange={(e) => {
+                                        setStartDate(e.target.value);
+                                        if(!endDate || e.target.value > endDate) setEndDate(e.target.value);
+                                    }}
+                                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Data de Fim</label>
+                                <input 
+                                    type="date" 
+                                    value={endDate} 
+                                    min={startDate}
+                                    onChange={(e) => setEndDate(e.target.value)}
+                                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all"
+                                />
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Motivo</label>
+                            <select 
+                                value={reason} 
+                                onChange={(e) => setReason(e.target.value)}
+                                className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all"
+                            >
+                                <option value="">Selecione...</option>
+                                {dayOffReasons.map(r => <option key={r} value={r}>{r}</option>)}
+                            </select>
+                        </div>
+
+                        <div className="pt-4 border-t border-gray-100 flex justify-end">
+                            <button type="submit" className="ods-red-bg ods-red-bg-hover text-white font-medium py-2.5 px-6 rounded-lg shadow-sm transition-colors flex items-center gap-2">
+                                Salvar Folga
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [isLoadingData, setIsLoadingData] = useState(true);
+
+            const [activeTab, setActiveTab] = useState('agenda'); 
+            const [message, setMessage] = useState(null); 
+            const [currentDate, setCurrentDate] = useState(new Date(2026, 3, 1)); 
+            const [selectedItem, setSelectedItem] = useState(null);
+            const [logoError, setLogoError] = useState(false);
+
+            const [employees] = useState(employeesList);
+            const [activities, setActivities] = useState([]);
+            const [daysOff, setDaysOff] = useState([]);
+            const [inventory, setInventory] = useState([]);
+            const [serviceTypes, setServiceTypes] = useState([]);
+            const [locations, setLocations] = useState([]);
+            const [dayOffReasons, setDayOffReasons] = useState([
+                "Férias", "Compensação de Banco de Horas", "Licença Médica", "Outros"
+            ]);
+
+            const showMessage = (type, text) => {
+                setMessage({ type, text });
+                setTimeout(() => setMessage(null), 4000);
+            };
+
+            useEffect(() => {
+                const loadData = async () => {
+                    try {
+                        await LocalDB.init();
+                        const storedActivities = await LocalDB.getAll('activities');
+                        const storedDaysOff = await LocalDB.getAll('daysOff');
+                        const storedSettings = await LocalDB.getAll('settings');
+                        const storedInventory = await LocalDB.getAll('inventory');
+
+                        setActivities(storedActivities);
+                        setDaysOff(storedDaysOff);
+                        setInventory(storedInventory);
+
+                        const config = storedSettings.find(s => s.id === 'config');
+                        if (config) {
+                            if (config.serviceTypes) setServiceTypes(config.serviceTypes);
+                            if (config.locations) setLocations(config.locations);
+                            if (config.dayOffReasons) setDayOffReasons(config.dayOffReasons);
+                        }
+                        setIsLoadingData(false);
+                    } catch (err) {
+                        console.error("Erro ao iniciar DB local:", err);
+                        showMessage('error', 'Erro ao carregar banco de dados local.');
+                        setIsLoadingData(false);
+                    }
+                };
+                loadData();
+            }, []);
+
+            const handleSaveActivities = async (newActivitiesArray, startDate) => {
+                try {
+                    for (const act of newActivitiesArray) {
+                        await LocalDB.put('activities', act);
+                    }
+                    setActivities(prev => [...prev, ...newActivitiesArray]);
+                    showMessage('success', 'Atividade(s) salva(s) localmente com sucesso!');
+                } catch (err) {
+                    showMessage('error', 'Erro ao salvar no banco de dados local.');
+                }
+                setCurrentDate(new Date(startDate + 'T12:00:00'));
+                setActiveTab('agenda');
+            };
+
+            const handleSaveDaysOff = async (newDaysOffArray, startDate) => {
+                try {
+                    for (const day of newDaysOffArray) {
+                        await LocalDB.put('daysOff', day);
+                    }
+                    setDaysOff(prev => [...prev, ...newDaysOffArray]);
+                    showMessage('success', 'Folga(s) salva(s) localmente com sucesso!');
+                } catch (err) {
+                    showMessage('error', 'Erro ao salvar no banco de dados local.');
+                }
+                setCurrentDate(new Date(startDate + 'T12:00:00'));
+                setActiveTab('agenda');
+            };
+
+            const deleteItem = async (type, ids) => {
+                const idsArray = Array.isArray(ids) ? ids : [ids];
+                const storeName = type === 'activity' ? 'activities' : 'daysOff';
+                
+                try {
+                    for (const id of idsArray) {
+                        await LocalDB.delete(storeName, id);
+                    }
+                    
+                    if (type === 'activity') setActivities(prev => prev.filter(a => !idsArray.includes(a.id)));
+                    else setDaysOff(prev => prev.filter(d => !idsArray.includes(d.id)));
+                    
+                    showMessage('success', 'Registro(s) removido(s) do banco de dados!');
+                } catch (err) {
+                    showMessage('error', 'Erro ao deletar registro.');
+                }
+            };
+            
+            const handleEditItem = async (item, newValues) => {
+                const idsArray = item.spanIds || [item.id];
+                const isDayOff = item.isDayOff;
+                const storeName = isDayOff ? 'daysOff' : 'activities';
+
+                try {
+                    for (const id of idsArray) {
+                        let targetItem = isDayOff ? daysOff.find(d => d.id === id) : activities.find(a => a.id === id);
+
+                        if (targetItem) {
+                            let updatedItem = { ...targetItem, ...newValues };
+                            await LocalDB.put(storeName, updatedItem);
+                        }
+                    }
+
+                    if (isDayOff) {
+                        setDaysOff(prev => prev.map(d => idsArray.includes(d.id) ? { ...d, ...newValues } : d));
+                    } else {
+                        setActivities(prev => prev.map(a => idsArray.includes(a.id) ? { ...a, ...newValues } : a));
+                    }
+
+                    showMessage('success', 'Registro atualizado e salvo com sucesso!');
+                    setSelectedItem(prev => ({ ...prev, ...newValues }));
+                } catch (err) {
+                    showMessage('error', 'Erro ao atualizar no banco de dados.');
+                }
+            };
+
+            const updateSettings = async (key, newArray) => {
+                let newConfig = { id: 'config', serviceTypes, locations, dayOffReasons };
+                newConfig[key] = newArray; 
+
+                if (key === 'serviceTypes') setServiceTypes(newArray);
+                if (key === 'locations') setLocations(newArray);
+                if (key === 'dayOffReasons') setDayOffReasons(newArray);
+
+                try {
+                    await LocalDB.put('settings', newConfig);
+                } catch (err) {
+                    showMessage('error', 'Erro ao salvar configurações.');
+                }
+            };
+
+            const handleImportCSV = (file) => {
+                showMessage('success', 'Lendo arquivo, aguarde...');
+                const reader = new FileReader();
+                reader.onload = async (evt) => {
+                    try {
+                        const bstr = evt.target.result;
+                        const wb = XLSX.read(bstr, {type:'binary'});
+                        const wsname = wb.SheetNames[0];
+                        const ws = wb.Sheets[wsname];
+                        const data = XLSX.utils.sheet_to_json(ws);
+
+                        if(data.length === 0) {
+                            showMessage('error', 'O arquivo está vazio ou formato inválido.');
+                            return;
+                        }
+
+                        let actsToAdd = [];
+                        let daysOffToAdd = [];
+                        let errors = 0;
+                        let firstDateStr = null;
+
+                        let newServicesSet = new Set();
+                        let newLocationsSet = new Set();
+
+                        const parseDate = (d) => {
+                            if(!d) return null;
+                            if(typeof d === 'number') { 
+                                const date = new Date(Math.round((d - 25569)*86400*1000));
+                                return date.toISOString().split('T')[0];
+                            }
+                            if(d.includes('/')) {
+                                const parts = d.split('/');
+                                if(parts.length === 3) return `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+                            }
+                            if(d.includes('-')) return d.split('T')[0];
+                            return null;
+                        };
+
+                        data.forEach((row) => {
+                            const colabName = row['Colaborador'];
+                            if(!colabName) return;
+
+                            const emp = employees.find(e => e.name.toLowerCase() === colabName.toString().toLowerCase().trim());
+                            if(!emp) { errors++; return; }
+
+                            const tipo = (row['Tipo (Atividade/Folga)'] || row['Tipo'] || '').toString().toLowerCase();
+                            const isFolga = tipo.includes('folga') || tipo.includes('day off');
+
+                            let dStart = parseDate(row['Data Inicio'] || row['Data Início'] || row['Data']);
+                            let dEnd = parseDate(row['Data Fim']) || dStart;
+
+                            if(!dStart) { errors++; return; }
+                            if(dStart < '2023-01-01') return;
+                            if(dEnd < dStart) dEnd = dStart;
+
+                            if(!firstDateStr) firstDateStr = dStart;
+
+                            const dates = getDatesInRange(dStart, dEnd);
+
+                            const sType = (row['Tipo Servico'] || row['Tipo de Serviço'] || 'Importado').toString().trim();
+                            const sLoc = (row['Localidade'] || 'Importado').toString().trim();
+
+                            if (!isFolga) {
+                                if (sType && !serviceTypes.includes(sType)) newServicesSet.add(sType);
+                                if (sLoc && !locations.includes(sLoc)) newLocationsSet.add(sLoc);
+                            }
+
+                            dates.forEach(date => {
+                                if(isFolga) {
+                                    daysOffToAdd.push({
+                                        id: Date.now() + Math.random(),
+                                        employeeId: emp.id,
+                                        date: date,
+                                        reason: row['Motivo'] || row['Descricao'] || 'Importado via Planilha'
+                                    });
+                                } else {
+                                    actsToAdd.push({
+                                        id: Date.now() + Math.random(),
+                                        employeeId: emp.id,
+                                        date: date,
+                                        sector: emp.category,
+                                        serviceType: sType,
+                                        location: sLoc,
+                                        description: row['Descricao'] || row['Descrição'] || ''
+                                    });
+                                }
+                            });
+                        });
+
+                        let updatedServiceTypes = [...serviceTypes];
+                        let updatedLocations = [...locations];
+                        let settingsChanged = false;
+
+                        if (newServicesSet.size > 0) {
+                            updatedServiceTypes = [...serviceTypes, ...Array.from(newServicesSet)];
+                            setServiceTypes(updatedServiceTypes);
+                            settingsChanged = true;
+                        }
+                        if (newLocationsSet.size > 0) {
+                            updatedLocations = [...locations, ...Array.from(newLocationsSet)];
+                            setLocations(updatedLocations);
+                            settingsChanged = true;
+                        }
+
+                        if (settingsChanged) {
+                            await LocalDB.put('settings', { 
+                                id: 'config', 
+                                serviceTypes: updatedServiceTypes, 
+                                locations: updatedLocations, 
+                                dayOffReasons: dayOffReasons 
+                            });
+                        }
+
+                        for (const act of actsToAdd) await LocalDB.put('activities', act);
+                        for (const day of daysOffToAdd) await LocalDB.put('daysOff', day);
+
+                        if (actsToAdd.length > 0) setActivities(prev => [...prev, ...actsToAdd]);
+                        if (daysOffToAdd.length > 0) setDaysOff(prev => [...prev, ...daysOffToAdd]);
+
+                        showMessage('success', `Importação concluída! ${actsToAdd.length} dias de atividade adicionados. (${errors} ignorados)`);
+                        
+                        if(firstDateStr) setCurrentDate(new Date(firstDateStr + 'T12:00:00'));
+
+                    } catch (err) {
+                        console.error(err);
+                        showMessage('error', 'Erro ao ler o arquivo. Certifique-se de usar o Modelo de Importação padrão.');
+                    }
+                };
+                reader.readAsBinaryString(file);
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col relative w-full">
+                    {/* Header */}
+                    <header className="ods-red-bg text-white shadow-md no-print">
+                        <div className="w-full px-4 py-3 flex flex-col xl:flex-row justify-between items-center gap-4">
+                            <div className="flex items-center gap-3">
+                                {!logoError ? (
+                                    <img 
+                                        src="https://ods-metering.com/wp-content/uploads/2024/09/ODS-METERING-SYSTEMS-LOGO-V2.png" 
+                                        alt="ODS Metering Systems Logo" 
+                                        className="h-10 bg-white p-1 rounded" 
+                                        onError={() => setLogoError(true)}
+                                    />
+                                ) : (
+                                    <div className="bg-white px-3 py-1.5 rounded flex items-center justify-center shadow-sm">
+                                        <span className="text-red-600 font-black text-2xl italic tracking-tighter">ODS</span>
+                                        <span className="text-gray-800 font-bold text-[10px] leading-tight ml-1.5 border-l border-gray-300 pl-1.5">METERING<br/>SYSTEMS</span>
+                                    </div>
+                                )}
+                                <div>
+                                    <h1 className="text-xl font-bold leading-tight">Painel Operacional</h1>
+                                    <p className="ods-red-light-text text-sm hidden md:block">Gestão de Serviços e Folgas</p>
+                                </div>
+                            </div>
+                            
+                            <div className="flex ods-red-bg-hover p-1 rounded-lg w-full xl:w-auto overflow-x-auto hide-scrollbar">
+                                <button onClick={() => setActiveTab('agenda')} className={`flex-1 xl:flex-none whitespace-nowrap px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'agenda' ? 'bg-white ods-red-text shadow' : 'text-white hover:bg-white hover:ods-red-text'}`}>Visão Geral</button>
+                                <button onClick={() => setActiveTab('add-activity')} className={`flex-1 xl:flex-none whitespace-nowrap px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'add-activity' ? 'bg-white ods-red-text shadow' : 'text-white hover:bg-white hover:ods-red-text'}`}>+ Atividade</button>
+                                <button onClick={() => setActiveTab('add-dayoff')} className={`flex-1 xl:flex-none whitespace-nowrap px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'add-dayoff' ? 'bg-white ods-red-text shadow' : 'text-white hover:bg-white hover:ods-red-text'}`}>+ Folga</button>
+                                <button onClick={() => setActiveTab('inventory')} className={`flex-1 xl:flex-none whitespace-nowrap px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center justify-center gap-2 ${activeTab === 'inventory' ? 'bg-white ods-red-text shadow' : 'text-white hover:bg-white hover:ods-red-text'}`}><PackageIcon /> Estoque</button>
+                                <button onClick={() => setActiveTab('checklist')} className={`flex-1 xl:flex-none whitespace-nowrap px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center justify-center gap-2 ${activeTab === 'checklist' ? 'bg-white ods-red-text shadow' : 'text-white hover:bg-white hover:ods-red-text'}`}><ClipboardCheckIcon /> In / Out</button>
+                                <button onClick={() => setActiveTab('config')} className={`flex-1 xl:flex-none whitespace-nowrap px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center justify-center gap-2 ${activeTab === 'config' ? 'bg-white ods-red-text shadow' : 'text-white hover:bg-white hover:ods-red-text'}`}><SettingsIcon /> Cadastros</button>
+                            </div>
+                        </div>
+                    </header>
+
+                    {message && (
+                        <div className="w-full px-4 mt-4 relative z-50 no-print">
+                            <div className={`p-4 rounded-lg flex items-center gap-3 shadow-sm border ${message.type === 'error' ? 'bg-red-50 text-red-800 border-red-200' : 'bg-green-50 text-green-800 border-green-200'}`}>
+                                {message.type === 'error' ? <AlertIcon /> : <div className="w-5 h-5 rounded-full bg-green-200 flex items-center justify-center text-green-700">✓</div>}
+                                <p className="font-medium">{message.text}</p>
+                            </div>
+                        </div>
+                    )}
+
+                    <main className="flex-1 w-full px-2 md:px-4 py-4 flex flex-col h-full">
+                        {isLoadingData ? (
+                            <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+                                <svg className="animate-spin h-8 w-8 text-red-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                <p className="font-medium">Carregando Banco de Dados Local...</p>
+                            </div>
+                        ) : (
+                            <>
+                                {activeTab === 'agenda' && (
+                                    <AgendaView activities={activities} daysOff={daysOff} employees={employees} currentDate={currentDate} setCurrentDate={setCurrentDate} selectedItem={selectedItem} setSelectedItem={setSelectedItem} showMessage={showMessage} handleImportCSV={handleImportCSV} />
+                                )}
+                                {activeTab === 'add-activity' && (
+                                    <ActivityForm handleSaveActivities={handleSaveActivities} daysOff={daysOff} employees={employees} showMessage={showMessage} serviceTypes={serviceTypes} locations={locations} setActiveTab={setActiveTab} setCurrentDate={setCurrentDate} />
+                                )}
+                                {activeTab === 'add-dayoff' && (
+                                    <DayOffForm handleSaveDaysOff={handleSaveDaysOff} activities={activities} employees={employees} showMessage={showMessage} dayOffReasons={dayOffReasons} setActiveTab={setActiveTab} setCurrentDate={setCurrentDate} />
+                                )}
+                                {activeTab === 'inventory' && (
+                                    <InventoryView inventory={inventory} setInventory={setInventory} showMessage={showMessage} />
+                                )}
+                                {activeTab === 'checklist' && (
+                                    <ChecklistInOutForm employees={employees} locations={locations} serviceTypes={serviceTypes} showMessage={showMessage} logoError={logoError} />
+                                )}
+                                {activeTab === 'config' && (
+                                    <ConfigView serviceTypes={serviceTypes} locations={locations} dayOffReasons={dayOffReasons} updateSettings={updateSettings} showMessage={showMessage} />
+                                )}
+                            </>
+                        )}
+
+                        <DetailsModal 
+                            selectedItem={selectedItem} 
+                            setSelectedItem={setSelectedItem} 
+                            deleteItem={deleteItem} 
+                            handleEdit={handleEditItem}
+                            serviceTypes={serviceTypes}
+                            locations={locations}
+                            dayOffReasons={dayOffReasons}
+                        />
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
