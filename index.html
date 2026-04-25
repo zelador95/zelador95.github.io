@@ -1,1397 +1,1496 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  LayoutDashboard, Package, Search, RefreshCw, 
-  MapPin, Plus, X, FileSpreadsheet, List, 
-  ChevronDown, ClipboardCheck, ArrowRight, ArrowLeft, Printer, Trash2, CloudUpload,
-  ClipboardList, Info
-} from 'lucide-react';
-
-// --- CONFIGURAÇÃO DE INTEGRAÇÃO ---
-const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTwpuFDiuBcbqZdPenl3bkfJAcdufNq3ZPDWqSoFF_kWho86G-jyUd_2x5NeRDT2UnD400bbqOjcavw/pub?gid=1535212226&single=true&output=csv"; 
-
-const GAS_URL = "https://script.google.com/macros/s/AKfycbxBjqHkKUj9NN99LCYOOHh4Xwg_IMJmaNKmZV3iCgYbdWT0UK2drKEABzpzOAXWlj_2/exec"; 
-
-const INITIAL_DATA = [];
-
-// --- LISTA DE KITS FPSO ---
-const KITS_FPSO = {
-  "FPSO Anna Nery": ["AF0302", "AF0300", "AF0600", "AF0602", "AF0603", "AF0604", "AF0605", "AF0606", "AF0607", "AF0608", "AF0609", "AF0621", "AF0809", "AF0874"],
-  "FPSO Atlanta": ["AF0346", "AF0599", "AF0601", "AF0611", "AF0616", "AF0826", "AF0827", "AF0828", "AF0829", "AF0830", "AF0831", "AF0832", "AF0833", "AF0834", "AF0876", "AF0877"],
-  "FPSO Maria Quitéria": ["AF0540", "AF0812", "AF0715", "AF0860", "AF0873", "AF0968", "AF0969", "AF0970", "AF0973", "AF0974", "AF0975", "AF0976", "AF0977", "AF0978", "AF0980", "AF0981"],
-  "FPSO Forte (Prio)": ["AF1022", "AF1026", "AF1038", "AF1042", "AF1046", "AF1050", "AF1054", "AF1058", "AF1062", "AF1090", "AF0983", "AF0989", "AF1007", "AF1012"],
-  "FPSO Polvo (Prio)": ["AF0302", "AF0877", "AF0975", "AF1010", "AF1014", "AF1044", "AF1048", "AF1052", "AF1056", "AF1064", "AF1024"],
-  "FPSO Bravo (Prio)": ["AF1023", "AF1027", "AF1039", "AF1043", "AF1047", "AF1051", "AF1055", "AF1059", "AF1063", "AF1091", "AF0984", "AF0990", "AF1008", "AF1013"],
-  "FPSO Frade (Prio)": ["AF1021", "AF0873", "AF1025", "AF1037", "AF1041", "AF1045", "AF1049", "AF1053", "AF1057", "AF1061", "AF1089", "AF0982", "AF0988", "AF1006", "AF1011"]
-};
-
-// --- DICIONÁRIO CHECKLIST SEPARAÇÃO ---
-const CHECKLIST_TEMPLATES = {
-  "Temperatura e Pressão": [
-    { name: "Manual Pneumatic Pump", accessories: "Conexões, Mangueiras" },
-    { name: "Manual Hydraulic Pump", accessories: "Conexões, Mangueiras" },
-    { name: "Multi Calibrator (mA, Ω, °C)", accessories: "Cabos, Carregador" },
-    { name: "Digital Megometer", accessories: "Pilhas" },
-    { name: "Probe Temperature (Thermoresistance)", accessories: "Sensor" },
-    { name: "Kit de Manômetros - Ver Aba", accessories: "Completo" },
-    { name: "Thermohygrometer", accessories: "Funcionando" },
-    { name: "Dry Block Calibrator", accessories: "Cabo de energia" },
-    { name: "Hart / Field Xpert", accessories: "Moblink, Carregador, Cabos comunicação, Resistor 250 ohm, Field Xpert" },
-  ],
-  "Dimensional": [
-    { name: "Caliper", accessories: "Bateria" },
-    { name: "Bore Gauge", accessories: "Bateria, relógio, ponteiras e calços" },
-    { name: "Feeler Gauge", accessories: "N/A" },
-    { name: "Angle Transferer (Goniometro)", accessories: "Régua do transferidor" },
-    { name: "Straight Edge", accessories: "NA" },
-    { name: "Profundity Micrometer", accessories: "NA" },
-    { name: "Rugosimeter", accessories: "Cabo de extensão, carregador, padrão rugosidade, chave" },
-    { name: "Measuring Tape", accessories: "N/A" },
-    { name: "Thermohygrometer", accessories: "Bateria" },
-    { name: "External Micrometer", accessories: "Pilha" },
-    { name: "Internal Micrometer", accessories: "Pilha" },
-    { name: "Hook Caliper", accessories: "Bateria" },
-  ],
-  "Prover (Calibração)": [
-    { name: "Water Draw (Calibração)", accessories: "Mangueiras transparentes, abraçadeiras 1/2\" e 3/8\", teflon, fita isolante" },
-    { name: "Mangueira inferior do Kit Water Draw", accessories: "N/A" },
-    { name: "Caixa de Instrumentação (Calibração)", accessories: "Cabos, tomada e extensão STECK bipolar" },
-    { name: "Pendriver - Conversor Modbus P/ USB", accessories: "N/A" },
-    { name: "Transmissor de temperatura - QTD = 3", accessories: "Obrigatório estar com os cabos de alimentação" },
-    { name: "Transmissor de pressão - QTD = 1", accessories: "Obrigatório estar com os cabos de alimentação" },
-    { name: "Hart / Field Xpert (Calibração)", accessories: "Moblink, Carregador, Cabos comunicação, Resistor 250 ohm, Field Xpert" },
-    { name: "Controlador da Honeywell", accessories: "Fonte de 24v e relé" },
-    { name: "Controle do Prover", accessories: "N/A" },
-    { name: "Kit Leak Test", accessories: "Mangueiras de Inox 1/2\" e 1/4\" npt, manometro diferencial, cronômetro" },
-    { name: "Suporte do Kit Water Draw (Tripé)", accessories: "N/A" },
-    { name: "Mangueiras reservas (Transparentes)", accessories: "N/A" },
-    { name: "Bomba", accessories: "Extensão com saida de tomada industrial" },
-    { name: "Caixa d'agua", accessories: "N/A" },
-    { name: "Conexões de PVC", accessories: "N/A" },
-    { name: "Vaso Serafim", accessories: "N/A" },
-    { name: "Kit Spare Solenoide", accessories: "N/A" },
-    { name: "Thermohygrometer", accessories: "Pilhas" },
-    { name: "Ferramentas", accessories: "1-Grifo, 2-Chave Inglesa, 2-Chaves Borne, Alicates, Chaves fenda/philips, Jogo Alen" },
-  ]
-};
-
-const getExpectedAccessories = (equipName) => {
-  if (!equipName) return "N/A";
-  const name = equipName.toLowerCase();
-  if (name.includes('pneumatic pump') || name.includes('hydraulic pump')) return "Conexões, Mangueiras";
-  if (name.includes('multi calibrator')) return "Cabos, Carregador";
-  if (name.includes('profundity')) return "N/A";
-  if (name.includes('megometer') || name.includes('thermohygrometer') || name.includes('micrômetro') || name.includes('micrometer')) return "Pilhas";
-  if (name.includes('probe temperature')) return "Sensor";
-  if (name.includes('kit de manômetros') || name.includes('manometer')) return "Completo";
-  if (name.includes('dry block') || name.includes('bloco seco')) return "Cabo de energia";
-  if (name.includes('hart') || name.includes('field xpert')) return "Moblink, Carregador, Cabos comunicação, Resistor 250 ohm, Field Xpert";
-  if (name.includes('caliper') || name.includes('paquímetro')) return "Bateria";
-  if (name.includes('bore gauge') || name.includes('bore gage') || name.includes('dial gauge') || name.includes('dial gage')) return "Bateria, relógio, ponteiras e calços";
-  if (name.includes('angle transferer') || name.includes('goniometro')) return "Régua do transferidor";
-  if (name.includes('water draw')) return "Mangueiras transparentes, abraçadeiras 1/2\" e 3/8\", teflon, fita isolante";
-  if (name.includes('caixa de instrumentação')) return "Cabos, tomada e extensão industrial";
-  if (name.includes('leak test')) return "Mangueiras Inox 1/2\" e 1/4\", manômetro diferencial, cronômetro";
-  return "Verificar manual/padrão";
-};
-
-const App = () => {
-  const [inventory, setInventory] = useState(INITIAL_DATA);
-  const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState('inventory'); 
-  const [isLocationDropdownOpen, setIsLocationDropdownOpen] = useState(false);
-  const [selectedLocation, setSelectedLocation] = useState('Todas');
-  const dropdownRef = useRef(null);
-
-  const [reportMode, setReportMode] = useState(false);
-  const [dispatchReportMode, setDispatchReportMode] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [equipmentSearchTerm, setEquipmentSearchTerm] = useState(''); 
-  const [printMessage, setPrintMessage] = useState(''); 
-
-  const [dispatchData, setDispatchData] = useState({
-    date: new Date().toISOString().split('T')[0],
-    responsible: '',
-    destination: '',
-    type: 'Temperatura e Pressão',
-    selectedKit: '',
-    items: {},
-    checks: { limpos: false, carregadores: false, cabos: false, certificado: false, maleta: false }
-  });
-
-  const [checklistData, setChecklistData] = useState({
-    type: 'OUT',
-    from: 'ODS Lab',
-    to: '',
-    objective: 'Serviços de calibração',
-    selectedEquipments: [],
-    integrity: '',
-    accessories: '',
-    operation: '',
-    comments: '',
-    verifier: '',
-    approver: '',
-    date: new Date().toISOString().split('T')[0],
-    dryBlockStatus: '',
-    dryBlockValue: '',
-    barometerAf: '',
-    barometerAtm: '',
-    caliperAf: '',
-    caliperBlock: '',
-    caliperValue: ''
-  });
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsLocationDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const parseCSV = (text) => {
-    const lines = text.split('\n').filter(line => line.trim() !== "");
-    if (lines.length === 0) return [];
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ODS Metering Systems</title>
     
-    const splitCsvLine = (str) => {
-      const result = [];
-      let curVal = '';
-      let inQuotes = false;
-      for (let i = 0; i < str.length; i++) {
-        if (str[i] === '"') {
-          inQuotes = !inQuotes;
-        } else if (str[i] === ',' && !inQuotes) {
-          result.push(curVal);
-          curVal = '';
-        } else {
-          curVal += str[i];
-        }
-      }
-      result.push(curVal);
-      return result.map(v => v.trim().replace(/^"|"$/g, ''));
-    };
+    <!-- Meta Tags para PWA (Mobile App) -->
+    <meta name="theme-color" content="#dc2626" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="ODS Metering" />
+    <link id="manifest-link" rel="manifest" href="" />
+    <link rel="apple-touch-icon" href="https://ods-metering.com/wp-content/uploads/2024/09/ODS-METERING-SYSTEMS-LOGO-V2.png">
 
-    const rawHeaders = splitCsvLine(lines[0]).map(h => h.toLowerCase());
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
     
-    const headerCounts = {};
-    const headers = rawHeaders.map(h => {
-      if (headerCounts[h]) {
-        headerCounts[h]++;
-        return `${h}_${headerCounts[h]}`;
-      } else {
-        headerCounts[h] = 1;
-        return h;
-      }
-    });
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     
-    return lines.slice(1).map((line, index) => {
-      const values = splitCsvLine(line);
-      const obj = { id: index };
-      headers.forEach((header, i) => {
-        obj[header] = values[i] || "";
-      });
-      return obj;
-    }).filter(item => {
-      const hasOds = item["ods code"] && item["ods code"].toLowerCase() !== "ods code";
-      const hasAfDim = item["af dimensional"] && item["af dimensional"].toLowerCase() !== "af dimensional";
-      return hasOds || hasAfDim;
-    }); 
-  };
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-  const fetchData = async () => {
-    if (!SHEET_URL) return;
-    setLoading(true);
-    try {
-      const response = await fetch(SHEET_URL);
-      const text = await response.text();
-      const parsedData = parseCSV(text);
-      setInventory(parsedData);
-    } catch (error) {
-      console.error("Erro ao buscar dados:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const uniqueLocations = ['Todas', ...new Set(inventory.map(item => item["equipment location"]).filter(loc => loc))];
-
-  const filteredInventory = inventory.filter(item => {
-    const searchStr = searchTerm.toLowerCase();
-    const afValue = String(item["af"] || item["número af"] || item["af dimensional"] || "").toLowerCase();
-    const equipName = String(item["equipment"] || item["equipment_2"] || "").toLowerCase();
-    
-    const matchesSearch = 
-      equipName.includes(searchStr) || 
-      String(item["ods code"] || "").toLowerCase().includes(searchStr) ||
-      afValue.includes(searchStr) ||
-      String(item["equipment location"] || "").toLowerCase().includes(searchStr);
-    const matchesLocation = selectedLocation === 'Todas' || item["equipment location"] === selectedLocation;
-    return matchesSearch && matchesLocation;
-  });
-
-  const handleInOutChange = (field, value) => {
-    setChecklistData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleTypeChange = (newType) => {
-    setEquipmentSearchTerm(''); 
-    setChecklistData(prev => ({ 
-      ...prev, 
-      type: newType, 
-      selectedEquipments: [],
-      from: newType === 'OUT' ? 'ODS Lab' : prev.to,
-      to: newType === 'IN' ? 'ODS Lab' : ''
-    }));
-  };
-
-  const handleAddEquipment = (e) => {
-    const eqId = e.target.value;
-    if (!eqId) return;
-    const eq = inventory.find(i => String(i.id) === eqId);
-    if (eq && !checklistData.selectedEquipments.some(item => item.id === eq.id)) {
-      handleInOutChange('selectedEquipments', [...checklistData.selectedEquipments, eq]);
-    }
-    setEquipmentSearchTerm(''); 
-  };
-
-  const handleRemoveEquipment = (id) => {
-    handleInOutChange(
-      'selectedEquipments',
-      checklistData.selectedEquipments.filter(item => item.id !== id)
-    );
-  };
-
-  // --- Funções de Checklist de Separação ---
-  const handleDispatchItemChange = (itemName, field, value) => {
-    setDispatchData(prev => ({
-      ...prev,
-      items: {
-        ...prev.items,
-        [itemName]: {
-          ...prev.items[itemName],
-          [field]: value
-        }
-      }
-    }));
-  };
-
-  const handleDispatchItemArrayChange = (itemName, newCode) => {
-    if (!newCode) return;
-    setDispatchData(prev => {
-      const currentItem = prev.items[itemName] || {};
-      const currentCodes = currentItem.codes || [];
-      if (currentCodes.includes(newCode)) return prev;
-      return {
-        ...prev,
-        items: {
-          ...prev.items,
-          [itemName]: {
-            ...currentItem,
-            codes: [...currentCodes, newCode]
-          }
-        }
-      };
-    });
-  };
-
-  const handleRemoveDispatchItemArray = (itemName, codeToRemove) => {
-    setDispatchData(prev => {
-      const currentItem = prev.items[itemName] || {};
-      const currentCodes = currentItem.codes || [];
-      return {
-        ...prev,
-        items: {
-          ...prev.items,
-          [itemName]: {
-            ...currentItem,
-            codes: currentCodes.filter(c => c !== codeToRemove)
-          }
-        }
-      };
-    });
-  };
-
-  const handleDispatchCheckChange = (checkName, value) => {
-    setDispatchData(prev => ({
-      ...prev,
-      checks: { ...prev.checks, [checkName]: value }
-    }));
-  };
-
-  // --- Função para Carregar Kit Predefinido Automaticamente ---
-  const handleKitSelection = (e) => {
-    const kitName = e.target.value;
-    
-    if (!kitName) {
-      setDispatchData(prev => ({ ...prev, selectedKit: kitName }));
-      return;
-    }
-
-    const kitCodes = KITS_FPSO[kitName] || [];
-
-    const kitInventoryItems = inventory.filter(inv => {
-      const invCode = String(inv["ods code"] || "").replace(/\s/g, '').toUpperCase();
-      const invAf = String(inv["af"] || inv["número af"] || "").replace(/\s/g, '').toUpperCase();
-      return kitCodes.some(code => code.toUpperCase() === invCode || code.toUpperCase() === invAf);
-    });
-
-    const newItems = { ...dispatchData.items };
-
-    CHECKLIST_TEMPLATES["Temperatura e Pressão"].forEach(item => {
-      let cleanItemNames = item.name
-        .toLowerCase()
-        .split('(')[0]
-        .split('- qtd')[0]
-        .split('- ver aba')[0]
-        .split('/')
-        .map(s => s.trim());
-
-      const isManometer = item.name.includes("Kit de Manômetros");
-      const isDryBlock = item.name.includes("Dry Block Calibrator");
-      const isMulti = isManometer || isDryBlock;
-
-      if (isManometer) cleanItemNames = ["manometer", "manômetro"];
-
-      const matchedItems = kitInventoryItems.filter(inv => {
-        const invName = String(inv["equipment_2"] || inv["equipment"] || inv["equipamento"] || "").toLowerCase();
-        return cleanItemNames.some(cleanName => invName.includes(cleanName) || cleanName.includes(invName));
-      });
-
-      if (matchedItems.length > 0) {
-        if (isMulti) {
-          newItems[item.name] = { codes: matchedItems.map(m => m["ods code"]), obs: "OK" };
-        } else {
-          newItems[item.name] = { code: matchedItems[0]["ods code"], obs: "OK" };
-        }
-      } else {
-        newItems[item.name] = isMulti ? { codes: [], obs: "" } : { code: "", obs: "" };
-      }
-    });
-
-    setDispatchData(prev => ({
-      ...prev,
-      selectedKit: kitName,
-      items: newItems
-    }));
-  };
-
-  const printReport = () => {
-    try {
-      window.print();
-      setPrintMessage("Dica: Se a janela de impressão não abriu, utilize o atalho Ctrl + P (ou Cmd + P).");
-      setTimeout(() => setPrintMessage(''), 8000);
-    } catch (e) {
-      setPrintMessage("A impressão direta foi bloqueada pelo navegador. Pressione Ctrl + P para imprimir.");
-      setTimeout(() => setPrintMessage(''), 8000);
-    }
-  };
-
-  const handlePrintDispatch = () => {
-    const selectedCodes = [];
-    Object.values(dispatchData.items).forEach(item => {
-      if (item.code && item.code.trim() !== "") selectedCodes.push(item.code);
-      if (item.codes && Array.isArray(item.codes)) selectedCodes.push(...item.codes);
-    });
-
-    const equipmentsToTransfer = inventory.filter(inv => 
-      selectedCodes.includes(inv["ods code"])
-    );
-
-    if (equipmentsToTransfer.length > 0) {
-      setChecklistData(prev => {
-        const existingIds = new Set(prev.selectedEquipments.map(e => e.id));
-        const newEquipments = equipmentsToTransfer.filter(e => !existingIds.has(e.id));
+    <style>
+        body { background-color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         
-        return {
-          ...prev,
-          type: 'OUT',
-          from: 'ODS Lab',
-          to: dispatchData.destination || prev.to, 
-          selectedEquipments: [...prev.selectedEquipments, ...newEquipments]
+        /* Ajuste do Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { height: 8px; width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Estilos de Impressão */
+        @media print {
+            body * { visibility: hidden; }
+            .print-area, .print-area * { visibility: visible; }
+            .print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 0; margin: 0; }
+            .no-print { display: none !important; }
+            @page { margin: 1cm; }
+        }
+    </style>
+
+    <script>
+        // --- INJEÇÃO DINÂMICA DO PWA (Service Worker e Manifest) ---
+        (function setupPWA() {
+            const manifest = {
+                "name": "ODS Metering Systems",
+                "short_name": "ODS Metering",
+                "description": "Painel Operacional e Estoque ODS",
+                "start_url": ".",
+                "display": "standalone",
+                "background_color": "#f3f4f6",
+                "theme_color": "#dc2626",
+                "icons": [
+                    { "src": "https://ods-metering.com/wp-content/uploads/2024/09/ODS-METERING-SYSTEMS-LOGO-V2.png", "sizes": "192x192", "type": "image/png" },
+                    { "src": "https://ods-metering.com/wp-content/uploads/2024/09/ODS-METERING-SYSTEMS-LOGO-V2.png", "sizes": "512x512", "type": "image/png" }
+                ]
+            };
+            const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+            document.getElementById('manifest-link').setAttribute('href', URL.createObjectURL(manifestBlob));
+
+            if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
+                try {
+                    const swCode = `
+                        self.addEventListener('install', (e) => { self.skipWaiting(); });
+                        self.addEventListener('activate', (e) => { e.waitUntil(clients.claim()); });
+                        self.addEventListener('fetch', (e) => {
+                            e.respondWith(fetch(e.request).catch(() => new Response('App Offline')));
+                        });
+                    `;
+                    const swBlob = new Blob([swCode], { type: 'application/javascript' });
+                    navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(()=>{});
+                } catch(e) {}
+            }
+        })();
+    </script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // ==========================================
+        // COMPONENTES DE ÍCONES (SUBSTITUI LUCIDE)
+        // ==========================================
+        const LayoutDashboard = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>;
+        const Package = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>;
+        const Search = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>;
+        const RefreshCw = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>;
+        const MapPin = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>;
+        const Plus = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>;
+        const X = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>;
+        const FileSpreadsheet = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/><path d="M8 13h8"/><path d="M8 17h8"/><path d="M14 11v10"/></svg>;
+        const ListIcon = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>;
+        const ChevronDown = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>;
+        const ClipboardCheck = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg>;
+        const ArrowRight = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>;
+        const ArrowLeft = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>;
+        const Printer = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>;
+        const Trash2 = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
+        const CloudUpload = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg>;
+        const ClipboardList = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg>;
+        const Info = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>;
+
+        // ==========================================
+        // DADOS E CONFIGURAÇÕES
+        // ==========================================
+        const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTwpuFDiuBcbqZdPenl3bkfJAcdufNq3ZPDWqSoFF_kWho86G-jyUd_2x5NeRDT2UnD400bbqOjcavw/pub?gid=1535212226&single=true&output=csv"; 
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbxBjqHkKUj9NN99LCYOOHh4Xwg_IMJmaNKmZV3iCgYbdWT0UK2drKEABzpzOAXWlj_2/exec"; 
+        const INITIAL_DATA = [];
+
+        const KITS_FPSO = {
+          "FPSO Anna Nery": ["AF0302", "AF0300", "AF0600", "AF0602", "AF0603", "AF0604", "AF0605", "AF0606", "AF0607", "AF0608", "AF0609", "AF0621", "AF0809", "AF0874"],
+          "FPSO Atlanta": ["AF0346", "AF0599", "AF0601", "AF0611", "AF0616", "AF0826", "AF0827", "AF0828", "AF0829", "AF0830", "AF0831", "AF0832", "AF0833", "AF0834", "AF0876", "AF0877"],
+          "FPSO Maria Quitéria": ["AF0540", "AF0812", "AF0715", "AF0860", "AF0873", "AF0968", "AF0969", "AF0970", "AF0973", "AF0974", "AF0975", "AF0976", "AF0977", "AF0978", "AF0980", "AF0981"],
+          "FPSO Forte (Prio)": ["AF1022", "AF1026", "AF1038", "AF1042", "AF1046", "AF1050", "AF1054", "AF1058", "AF1062", "AF1090", "AF0983", "AF0989", "AF1007", "AF1012"],
+          "FPSO Polvo (Prio)": ["AF0302", "AF0877", "AF0975", "AF1010", "AF1014", "AF1044", "AF1048", "AF1052", "AF1056", "AF1064", "AF1024"],
+          "FPSO Bravo (Prio)": ["AF1023", "AF1027", "AF1039", "AF1043", "AF1047", "AF1051", "AF1055", "AF1059", "AF1063", "AF1091", "AF0984", "AF0990", "AF1008", "AF1013"],
+          "FPSO Frade (Prio)": ["AF1021", "AF0873", "AF1025", "AF1037", "AF1041", "AF1045", "AF1049", "AF1053", "AF1057", "AF1061", "AF1089", "AF0982", "AF0988", "AF1006", "AF1011"]
         };
-      });
-    }
 
-    setDispatchReportMode(true);
-    setTimeout(() => printReport(), 800);
-  };
+        const CHECKLIST_TEMPLATES = {
+          "Temperatura e Pressão": [
+            { name: "Manual Pneumatic Pump", accessories: "Conexões, Mangueiras" },
+            { name: "Manual Hydraulic Pump", accessories: "Conexões, Mangueiras" },
+            { name: "Multi Calibrator (mA, Ω, °C)", accessories: "Cabos, Carregador" },
+            { name: "Digital Megometer", accessories: "Pilhas" },
+            { name: "Probe Temperature (Thermoresistance)", accessories: "Sensor" },
+            { name: "Kit de Manômetros - Ver Aba", accessories: "Completo" },
+            { name: "Thermohygrometer", accessories: "Funcionando" },
+            { name: "Dry Block Calibrator", accessories: "Cabo de energia" },
+            { name: "Hart / Field Xpert", accessories: "Moblink, Carregador, Cabos comunicação, Resistor 250 ohm, Field Xpert" },
+          ],
+          "Dimensional": [
+            { name: "Caliper", accessories: "Bateria" },
+            { name: "Bore Gauge", accessories: "Bateria, relógio, ponteiras e calços" },
+            { name: "Feeler Gauge", accessories: "N/A" },
+            { name: "Angle Transferer (Goniometro)", accessories: "Régua do transferidor" },
+            { name: "Straight Edge", accessories: "NA" },
+            { name: "Profundity Micrometer", accessories: "NA" },
+            { name: "Rugosimeter", accessories: "Cabo de extensão, carregador, padrão rugosidade, chave" },
+            { name: "Measuring Tape", accessories: "N/A" },
+            { name: "Thermohygrometer", accessories: "Bateria" },
+            { name: "External Micrometer", accessories: "Pilha" },
+            { name: "Internal Micrometer", accessories: "Pilha" },
+            { name: "Hook Caliper", accessories: "Bateria" },
+          ],
+          "Prover (Calibração)": [
+            { name: "Water Draw (Calibração)", accessories: "Mangueiras transparentes, abraçadeiras 1/2\" e 3/8\", teflon, fita isolante" },
+            { name: "Mangueira inferior do Kit Water Draw", accessories: "N/A" },
+            { name: "Caixa de Instrumentação (Calibração)", accessories: "Cabos, tomada e extensão STECK bipolar" },
+            { name: "Pendriver - Conversor Modbus P/ USB", accessories: "N/A" },
+            { name: "Transmissor de temperatura - QTD = 3", accessories: "Obrigatório estar com os cabos de alimentação" },
+            { name: "Transmissor de pressão - QTD = 1", accessories: "Obrigatório estar com os cabos de alimentação" },
+            { name: "Hart / Field Xpert (Calibração)", accessories: "Moblink, Carregador, Cabos comunicação, Resistor 250 ohm, Field Xpert" },
+            { name: "Controlador da Honeywell", accessories: "Fonte de 24v e relé" },
+            { name: "Controle do Prover", accessories: "N/A" },
+            { name: "Kit Leak Test", accessories: "Mangueiras de Inox 1/2\" e 1/4\" npt, manometro diferencial, cronômetro" },
+            { name: "Suporte do Kit Water Draw (Tripé)", accessories: "N/A" },
+            { name: "Mangueiras reservas (Transparentes)", accessories: "N/A" },
+            { name: "Bomba", accessories: "Extensão com saida de tomada industrial" },
+            { name: "Caixa d'agua", accessories: "N/A" },
+            { name: "Conexões de PVC", accessories: "N/A" },
+            { name: "Vaso Serafim", accessories: "N/A" },
+            { name: "Kit Spare Solenoide", accessories: "N/A" },
+            { name: "Thermohygrometer", accessories: "Pilhas" },
+            { name: "Ferramentas", accessories: "1-Grifo, 2-Chave Inglesa, 2-Chaves Borne, Alicates, Chaves fenda/philips, Jogo Alen" },
+          ]
+        };
 
-  const handleSaveAndGenerate = async () => {
-    if (!GAS_URL || checklistData.to.trim() === '') {
-      setPrintMessage("Por favor, preencha o destino (Para) antes de guardar.");
-      setTimeout(() => setPrintMessage(''), 5000);
-      return;
-    }
-    
-    setIsSaving(true);
-    try {
-      await fetch(GAS_URL, {
-        method: 'POST',
-        body: JSON.stringify(checklistData),
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }
-      });
-      
-      const novoDestino = checklistData.to;
-      const idEquipamentosSelecionados = checklistData.selectedEquipments.map(eq => eq.id);
-      
-      setInventory(prevInventory => 
-        prevInventory.map(item => {
-          if (idEquipamentosSelecionados.includes(item.id)) {
-            return { ...item, "equipment location": novoDestino };
-          }
-          return item;
-        })
-      );
+        const getExpectedAccessories = (equipName) => {
+          if (!equipName) return "N/A";
+          const name = equipName.toLowerCase();
+          if (name.includes('pneumatic pump') || name.includes('hydraulic pump')) return "Conexões, Mangueiras";
+          if (name.includes('multi calibrator')) return "Cabos, Carregador";
+          if (name.includes('profundity')) return "N/A";
+          if (name.includes('megometer') || name.includes('thermohygrometer') || name.includes('micrômetro') || name.includes('micrometer')) return "Pilhas";
+          if (name.includes('probe temperature')) return "Sensor";
+          if (name.includes('kit de manômetros') || name.includes('manometer')) return "Completo";
+          if (name.includes('dry block') || name.includes('bloco seco')) return "Cabo de energia";
+          if (name.includes('hart') || name.includes('field xpert')) return "Moblink, Carregador, Cabos comunicação, Resistor 250 ohm, Field Xpert";
+          if (name.includes('caliper') || name.includes('paquímetro')) return "Bateria";
+          if (name.includes('bore gauge') || name.includes('bore gage') || name.includes('dial gauge') || name.includes('dial gage')) return "Bateria, relógio, ponteiras e calços";
+          if (name.includes('angle transferer') || name.includes('goniometro')) return "Régua do transferidor";
+          if (name.includes('water draw')) return "Mangueiras transparentes, abraçadeiras 1/2\" e 3/8\", teflon, fita isolante";
+          if (name.includes('caixa de instrumentação')) return "Cabos, tomada e extensão industrial";
+          if (name.includes('leak test')) return "Mangueiras Inox 1/2\" e 1/4\", manômetro diferencial, cronômetro";
+          return "Verificar manual/padrão";
+        };
 
-      setReportMode(true);
-      setTimeout(() => printReport(), 800);
-    } catch (error) {
-      console.error("Erro ao guardar no Sheets:", error);
-      setPrintMessage("Erro ao comunicar com a folha de cálculo. A gerar relatório offline.");
-      setTimeout(() => setPrintMessage(''), 5000);
-      setReportMode(true);
-    } finally {
-      setIsSaving(false);
-    }
-  };
+        // ==========================================
+        // COMPONENTE PRINCIPAL DA APLICAÇÃO
+        // ==========================================
+        const App = () => {
+          const [inventory, setInventory] = useState(INITIAL_DATA);
+          const [loading, setLoading] = useState(false);
+          const [searchTerm, setSearchTerm] = useState('');
+          const [activeTab, setActiveTab] = useState('inventory'); 
+          const [isLocationDropdownOpen, setIsLocationDropdownOpen] = useState(false);
+          const [selectedLocation, setSelectedLocation] = useState('Todas');
+          const dropdownRef = useRef(null);
 
-  const isDryBlock = checklistData.selectedEquipments.some(eq => {
-    const name = (eq.equipment || eq.equipment_2 || "").toLowerCase();
-    return name.includes('dry block') || name.includes('bloco seco');
-  });
-  const isBarometer = checklistData.selectedEquipments.some(eq => {
-    const name = (eq.equipment || eq.equipment_2 || "").toLowerCase();
-    return name.includes('barometer') || name.includes('barômetro');
-  });
-  const isCaliper = checklistData.selectedEquipments.some(eq => {
-    const name = (eq.equipment || eq.equipment_2 || "").toLowerCase();
-    return name.includes('caliper') || name.includes('paquímetro');
-  });
+          const [reportMode, setReportMode] = useState(false);
+          const [dispatchReportMode, setDispatchReportMode] = useState(false);
+          const [isSaving, setIsSaving] = useState(false);
+          const [equipmentSearchTerm, setEquipmentSearchTerm] = useState(''); 
+          const [printMessage, setPrintMessage] = useState(''); 
 
-  const availableEquipmentsForChecklist = inventory.filter(item => {
-    const loc = String(item["equipment location"] || "").toLowerCase();
-    const isLab = loc.includes('ods lab') || loc === 'ods';
-    const matchesType = checklistData.type === 'OUT' ? isLab : !isLab;
-    
-    if (!matchesType) return false;
+          const [dispatchData, setDispatchData] = useState({
+            date: new Date().toISOString().split('T')[0],
+            responsible: '',
+            destination: '',
+            type: 'Temperatura e Pressão',
+            selectedKit: '',
+            items: {},
+            checks: { limpos: false, carregadores: false, cabos: false, certificado: false, maleta: false }
+          });
 
-    if (equipmentSearchTerm) {
-      const searchStr = equipmentSearchTerm.toLowerCase();
-      const afValue = String(item["af"] || item["número af"] || item["af dimensional"] || "").toLowerCase();
-      const equipName = String(item["equipment"] || item["equipment_2"] || "").toLowerCase();
-      
-      return (
-        equipName.includes(searchStr) || 
-        String(item["ods code"] || "").toLowerCase().includes(searchStr) ||
-        afValue.includes(searchStr)
-      );
-    }
-    return true;
-  });
+          const [checklistData, setChecklistData] = useState({
+            type: 'OUT',
+            from: 'ODS Lab',
+            to: '',
+            objective: 'Serviços de calibração',
+            selectedEquipments: [],
+            integrity: '',
+            accessories: '',
+            operation: '',
+            comments: '',
+            verifier: '',
+            approver: '',
+            date: new Date().toISOString().split('T')[0],
+            dryBlockStatus: '',
+            dryBlockValue: '',
+            barometerAf: '',
+            barometerAtm: '',
+            caliperAf: '',
+            caliperBlock: '',
+            caliperValue: ''
+          });
 
-  const renderDispatchRows = () => {
-    return CHECKLIST_TEMPLATES[dispatchData.type].map((item, idx) => {
-      let cleanItemNames = item.name
-        .toLowerCase()
-        .split('(')[0]
-        .split('- qtd')[0]
-        .split('- ver aba')[0]
-        .split('/')
-        .map(s => s.trim());
+          useEffect(() => {
+            const handleClickOutside = (event) => {
+              if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsLocationDropdownOpen(false);
+              }
+            };
+            document.addEventListener('mousedown', handleClickOutside);
+            return () => document.removeEventListener('mousedown', handleClickOutside);
+          }, []);
 
-      const isManometer = item.name.includes("Kit de Manômetros");
-      const isBoreGauge = item.name.includes("Bore Gauge");
-      const isDryBlock = item.name.includes("Dry Block Calibrator");
-      
-      const isMulti = isManometer || isBoreGauge || isDryBlock;
+          const parseCSV = (text) => {
+            const lines = text.split('\n').filter(line => line.trim() !== "");
+            if (lines.length === 0) return [];
+            
+            const splitCsvLine = (str) => {
+              const result = [];
+              let curVal = '';
+              let inQuotes = false;
+              for (let i = 0; i < str.length; i++) {
+                if (str[i] === '"') {
+                  inQuotes = !inQuotes;
+                } else if (str[i] === ',' && !inQuotes) {
+                  result.push(curVal);
+                  curVal = '';
+                } else {
+                  curVal += str[i];
+                }
+              }
+              result.push(curVal);
+              return result.map(v => v.trim().replace(/^"|"$/g, ''));
+            };
 
-      if (isManometer) {
-        cleanItemNames = ["manometer", "manômetro"];
-      } else if (isBoreGauge) {
-        cleanItemNames = ["bore gauge", "bore gage", "dial gauge", "dial gage"];
-      }
+            const rawHeaders = splitCsvLine(lines[0]).map(h => h.toLowerCase());
+            
+            const headerCounts = {};
+            const headers = rawHeaders.map(h => {
+              if (headerCounts[h]) {
+                headerCounts[h]++;
+                return `${h}_${headerCounts[h]}`;
+              } else {
+                headerCounts[h] = 1;
+                return h;
+              }
+            });
+            
+            return lines.slice(1).map((line, index) => {
+              const values = splitCsvLine(line);
+              const obj = { id: index };
+              headers.forEach((header, i) => {
+                obj[header] = values[i] || "";
+              });
+              return obj;
+            }).filter(item => {
+              const hasOds = item["ods code"] && item["ods code"].toLowerCase() !== "ods code";
+              const hasAfDim = item["af dimensional"] && item["af dimensional"].toLowerCase() !== "af dimensional";
+              return hasOds || hasAfDim;
+            }); 
+          };
 
-      let filteredOptions = inventory.filter(inv => {
-        const invName = String(inv["equipment_2"] || inv["equipment"] || inv["equipamento"] || "").toLowerCase();
-        
-        if (item.name === "Caliper" && invName.includes("hook caliper")) {
-          return false;
-        }
+          const fetchData = async () => {
+            if (!SHEET_URL) return;
+            setLoading(true);
+            try {
+              const response = await fetch(SHEET_URL);
+              const text = await response.text();
+              const parsedData = parseCSV(text);
+              setInventory(parsedData);
+            } catch (error) {
+              console.error("Erro ao buscar dados:", error);
+            } finally {
+              setLoading(false);
+            }
+          };
 
-        return cleanItemNames.some(cleanName => invName.includes(cleanName) || cleanName.includes(invName));
-      });
+          useEffect(() => {
+            fetchData();
+          }, []);
 
-      if (filteredOptions.length === 0) {
-        filteredOptions = inventory;
-      }
+          const uniqueLocations = ['Todas', ...new Set(inventory.map(item => item["equipment location"]).filter(loc => loc))];
 
-      return (
-        <tr key={idx} className="hover:bg-slate-50 transition-colors">
-          <td className="p-4 font-bold text-slate-800">{item.name}</td>
-          <td className="p-4 text-slate-500 text-xs italic">{item.accessories}</td>
-          <td className="p-4">
-            {isMulti ? (
-              <div className="flex flex-col gap-2">
-                <select 
-                  className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-semibold focus:ring-2 focus:ring-red-500"
-                  value=""
-                  onChange={(e) => handleDispatchItemArrayChange(item.name, e.target.value)}
-                >
-                  <option value="">-- Adicionar ODS --</option>
-                  {filteredOptions.map(inv => (
-                    <option key={inv.id} value={inv["ods code"]}>
-                      {inv["ods code"]} {inv.af ? `(${inv.af})` : ''} - {inv.equipment || inv.equipment_2}
-                    </option>
-                  ))}
-                </select>
+          const filteredInventory = inventory.filter(item => {
+            const searchStr = searchTerm.toLowerCase();
+            const afValue = String(item["af"] || item["número af"] || item["af dimensional"] || "").toLowerCase();
+            const equipName = String(item["equipment"] || item["equipment_2"] || "").toLowerCase();
+            
+            const matchesSearch = 
+              equipName.includes(searchStr) || 
+              String(item["ods code"] || "").toLowerCase().includes(searchStr) ||
+              afValue.includes(searchStr) ||
+              String(item["equipment location"] || "").toLowerCase().includes(searchStr);
+            const matchesLocation = selectedLocation === 'Todas' || item["equipment location"] === selectedLocation;
+            return matchesSearch && matchesLocation;
+          });
+
+          const handleInOutChange = (field, value) => {
+            setChecklistData(prev => ({ ...prev, [field]: value }));
+          };
+
+          const handleTypeChange = (newType) => {
+            setEquipmentSearchTerm(''); 
+            setChecklistData(prev => ({ 
+              ...prev, 
+              type: newType, 
+              selectedEquipments: [],
+              from: newType === 'OUT' ? 'ODS Lab' : prev.to,
+              to: newType === 'IN' ? 'ODS Lab' : ''
+            }));
+          };
+
+          const handleAddEquipment = (e) => {
+            const eqId = e.target.value;
+            if (!eqId) return;
+            const eq = inventory.find(i => String(i.id) === eqId);
+            if (eq && !checklistData.selectedEquipments.some(item => item.id === eq.id)) {
+              handleInOutChange('selectedEquipments', [...checklistData.selectedEquipments, eq]);
+            }
+            setEquipmentSearchTerm(''); 
+          };
+
+          const handleRemoveEquipment = (id) => {
+            handleInOutChange(
+              'selectedEquipments',
+              checklistData.selectedEquipments.filter(item => item.id !== id)
+            );
+          };
+
+          const handleDispatchItemChange = (itemName, field, value) => {
+            setDispatchData(prev => ({
+              ...prev,
+              items: {
+                ...prev.items,
+                [itemName]: {
+                  ...prev.items[itemName],
+                  [field]: value
+                }
+              }
+            }));
+          };
+
+          const handleDispatchItemArrayChange = (itemName, newCode) => {
+            if (!newCode) return;
+            setDispatchData(prev => {
+              const currentItem = prev.items[itemName] || {};
+              const currentCodes = currentItem.codes || [];
+              if (currentCodes.includes(newCode)) return prev;
+              return {
+                ...prev,
+                items: {
+                  ...prev.items,
+                  [itemName]: {
+                    ...currentItem,
+                    codes: [...currentCodes, newCode]
+                  }
+                }
+              };
+            });
+          };
+
+          const handleRemoveDispatchItemArray = (itemName, codeToRemove) => {
+            setDispatchData(prev => {
+              const currentItem = prev.items[itemName] || {};
+              const currentCodes = currentItem.codes || [];
+              return {
+                ...prev,
+                items: {
+                  ...prev.items,
+                  [itemName]: {
+                    ...currentItem,
+                    codes: currentCodes.filter(c => c !== codeToRemove)
+                  }
+                }
+              };
+            });
+          };
+
+          const handleDispatchCheckChange = (checkName, value) => {
+            setDispatchData(prev => ({
+              ...prev,
+              checks: { ...prev.checks, [checkName]: value }
+            }));
+          };
+
+          const handleKitSelection = (e) => {
+            const kitName = e.target.value;
+            
+            if (!kitName) {
+              setDispatchData(prev => ({ ...prev, selectedKit: kitName }));
+              return;
+            }
+
+            const kitCodes = KITS_FPSO[kitName] || [];
+
+            const kitInventoryItems = inventory.filter(inv => {
+              const invCode = String(inv["ods code"] || "").replace(/\s/g, '').toUpperCase();
+              const invAf = String(inv["af"] || inv["número af"] || "").replace(/\s/g, '').toUpperCase();
+              return kitCodes.some(code => code.toUpperCase() === invCode || code.toUpperCase() === invAf);
+            });
+
+            const newItems = { ...dispatchData.items };
+
+            CHECKLIST_TEMPLATES["Temperatura e Pressão"].forEach(item => {
+              let cleanItemNames = item.name
+                .toLowerCase()
+                .split('(')[0]
+                .split('- qtd')[0]
+                .split('- ver aba')[0]
+                .split('/')
+                .map(s => s.trim());
+
+              const isManometer = item.name.includes("Kit de Manômetros");
+              const isDryBlock = item.name.includes("Dry Block Calibrator");
+              const isMulti = isManometer || isDryBlock;
+
+              if (isManometer) cleanItemNames = ["manometer", "manômetro"];
+
+              const matchedItems = kitInventoryItems.filter(inv => {
+                const invName = String(inv["equipment_2"] || inv["equipment"] || inv["equipamento"] || "").toLowerCase();
+                return cleanItemNames.some(cleanName => invName.includes(cleanName) || cleanName.includes(invName));
+              });
+
+              if (matchedItems.length > 0) {
+                if (isMulti) {
+                  newItems[item.name] = { codes: matchedItems.map(m => m["ods code"]), obs: "OK" };
+                } else {
+                  newItems[item.name] = { code: matchedItems[0]["ods code"], obs: "OK" };
+                }
+              } else {
+                newItems[item.name] = isMulti ? { codes: [], obs: "" } : { code: "", obs: "" };
+              }
+            });
+
+            setDispatchData(prev => ({
+              ...prev,
+              selectedKit: kitName,
+              items: newItems
+            }));
+          };
+
+          const printReport = () => {
+            try {
+              window.print();
+              setPrintMessage("Dica: Se a janela de impressão não abriu, utilize o atalho Ctrl + P (ou Cmd + P).");
+              setTimeout(() => setPrintMessage(''), 8000);
+            } catch (e) {
+              setPrintMessage("A impressão direta foi bloqueada pelo navegador. Pressione Ctrl + P para imprimir.");
+              setTimeout(() => setPrintMessage(''), 8000);
+            }
+          };
+
+          const handlePrintDispatch = () => {
+            const selectedCodes = [];
+            Object.values(dispatchData.items).forEach(item => {
+              if (item.code && item.code.trim() !== "") selectedCodes.push(item.code);
+              if (item.codes && Array.isArray(item.codes)) selectedCodes.push(...item.codes);
+            });
+
+            const equipmentsToTransfer = inventory.filter(inv => 
+              selectedCodes.includes(inv["ods code"])
+            );
+
+            if (equipmentsToTransfer.length > 0) {
+              setChecklistData(prev => {
+                const existingIds = new Set(prev.selectedEquipments.map(e => e.id));
+                const newEquipments = equipmentsToTransfer.filter(e => !existingIds.has(e.id));
                 
-                {dispatchData.items[item.name]?.codes?.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {dispatchData.items[item.name].codes.map(c => (
-                      <span key={c} className="bg-red-50 text-red-700 px-2 py-1 rounded-md text-[10px] font-bold border border-red-200 flex items-center gap-1.5 shadow-sm">
-                        {c}
-                        <button 
-                          onClick={() => handleRemoveDispatchItemArray(item.name, c)}
-                          className="bg-red-200 hover:bg-red-300 rounded-full p-0.5 transition-colors"
-                        >
-                          <X size={10} className="text-red-800" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <select 
-                className={`w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-semibold focus:ring-2 focus:ring-red-500 ${dispatchData.items[item.name]?.code ? 'border-red-400 bg-red-50' : ''}`}
-                value={dispatchData.items[item.name]?.code || ''}
-                onChange={(e) => handleDispatchItemChange(item.name, 'code', e.target.value)}
-              >
-                <option value="">-- Selecionar ODS / N/A --</option>
-                {filteredOptions.map(inv => (
-                  <option key={inv.id} value={inv["ods code"]}>
-                    {inv["ods code"]} {inv.af ? `(${inv.af})` : ''} - {inv.equipment || inv.equipment_2}
-                  </option>
-                ))}
-              </select>
-            )}
-          </td>
-          <td className="p-4">
-            <input 
-              type="text" 
-              className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-red-500" 
-              placeholder="OK / Status..."
-              value={dispatchData.items[item.name]?.obs || ''}
-              onChange={(e) => handleDispatchItemChange(item.name, 'obs', e.target.value)}
-            />
-          </td>
-        </tr>
-      );
-    });
-  };
+                return {
+                  ...prev,
+                  type: 'OUT',
+                  from: 'ODS Lab',
+                  to: dispatchData.destination || prev.to, 
+                  selectedEquipments: [...prev.selectedEquipments, ...newEquipments]
+                };
+              });
+            }
 
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex print:bg-white print:m-0">
-      
-      {printMessage && (
-        <div className="fixed bottom-6 right-6 bg-slate-800 text-white px-6 py-4 rounded-2xl shadow-2xl z-50 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 border border-slate-700 max-w-sm print:hidden">
-          <Info className="text-orange-400 shrink-0" size={24} />
-          <p className="text-sm font-semibold">{printMessage}</p>
-        </div>
-      )}
+            setDispatchReportMode(true);
+            setTimeout(() => printReport(), 800);
+          };
 
-      <aside className="fixed inset-y-0 left-0 w-64 bg-slate-900 text-white p-6 hidden lg:flex flex-col shadow-2xl print:hidden z-10">
-        <div className="flex items-center gap-3 mb-10">
-          <div className="bg-white p-2 rounded-xl shadow-lg shadow-red-500/20 flex justify-center items-center">
-            {/* O Logo deve estar na pasta 'public' do projeto */}
-            <img 
-              src="/dog%20ods.png" 
-              alt="ODS Metering Systems Logo" 
-              className="h-8 w-auto" 
-              onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }}
-            />
-            <Package size={24} className="text-red-600 hidden" />
-          </div>
-          <h1 className="text-xl font-black tracking-tight uppercase">ODS Metering Systems</h1>
-        </div>
-        
-        <nav className="flex-1 space-y-2">
-          <button 
-            onClick={() => { setActiveTab('inventory'); setReportMode(false); setDispatchReportMode(false); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'inventory' ? 'bg-red-600 shadow-lg' : 'hover:bg-slate-800 text-slate-400'}`}
-          >
-            <LayoutDashboard size={20} /> Inventário ODS
-          </button>
-          
-          <button 
-            onClick={() => { setActiveTab('dispatch'); setReportMode(false); setDispatchReportMode(false); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'dispatch' ? 'bg-red-600 shadow-lg' : 'hover:bg-slate-800 text-slate-400'}`}
-          >
-            <ClipboardList size={20} /> Checklist de Saída
-          </button>
-
-          <button 
-            onClick={() => { setActiveTab('checklist'); setReportMode(false); setDispatchReportMode(false); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'checklist' ? 'bg-red-600 shadow-lg' : 'hover:bg-slate-800 text-slate-400'}`}
-          >
-            <ClipboardCheck size={20} /> Relatório IN/OUT
-          </button>
-        </nav>
-
-        <div className="mt-auto p-5 bg-slate-800/40 rounded-2xl border border-slate-700/50">
-           <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest mb-2 text-red-400">
-             <FileSpreadsheet size={14} /> Base de Dados
-           </div>
-           <p className="text-[11px] text-orange-400 font-bold">Sincronização OK</p>
-        </div>
-      </aside>
-
-      <main className="flex-1 lg:ml-64 p-4 md:p-8 print:p-0 print:m-0 w-full">
-        
-        {(!reportMode && !dispatchReportMode) && (
-          <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10 print:hidden">
-            <div>
-              <h2 className="text-3xl font-black text-slate-800 tracking-tight italic uppercase">
-                {activeTab === 'inventory' && 'Localização de Equipamentos'}
-                {activeTab === 'dispatch' && 'Checklist de Verificação de Saída'}
-                {activeTab === 'checklist' && 'Relatório Oficial de Entrada e Saída'}
-              </h2>
-              {activeTab === 'inventory' && (
-                <div className="flex items-center gap-2 mt-1">
-                  <div className={`h-2 w-2 rounded-full ${loading ? 'bg-red-500 animate-pulse' : 'bg-orange-500'}`}></div>
-                  <p className="text-slate-500 text-xs font-bold uppercase tracking-wide">
-                    {loading ? 'A sincronizar...' : 'Dados Sincronizados'}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {activeTab === 'inventory' && (
-              <button 
-                onClick={fetchData}
-                disabled={loading}
-                className="bg-white border border-slate-200 p-3 rounded-xl hover:bg-slate-50 transition shadow-sm active:scale-90"
-              >
-                <RefreshCw size={20} className={loading ? "animate-spin text-red-600" : "text-slate-600"} />
-              </button>
-            )}
-          </header>
-        )}
-
-        {/* --- ABA 1: INVENTÁRIO --- */}
-        {activeTab === 'inventory' && !reportMode && !dispatchReportMode && (
-          <div className="animate-in fade-in duration-300">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-              <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex items-center justify-between group hover:border-red-200 transition-colors">
-                <div>
-                  <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">
-                    {searchTerm || selectedLocation !== 'Todas' ? 'Resultados Encontrados' : 'Equipamentos Totais'}
-                  </h3>
-                  <p className={`text-5xl font-black ${searchTerm || selectedLocation !== 'Todas' ? 'text-red-600' : 'text-slate-900'}`}>
-                    {filteredInventory.length}
-                  </p>
-                </div>
-                <div className="p-4 rounded-2xl bg-red-50 text-red-600 group-hover:bg-red-600 group-hover:text-white transition-all">
-                  <List size={32} />
-                </div>
-              </div>
-
-              <div className="relative" ref={dropdownRef}>
-                <button 
-                  onClick={() => setIsLocationDropdownOpen(!isLocationDropdownOpen)}
-                  className={`w-full bg-white p-8 rounded-3xl shadow-sm border flex items-center justify-between group transition-all text-left ${selectedLocation !== 'Todas' ? 'border-red-500 ring-2 ring-red-50' : 'border-slate-100 hover:border-orange-200'}`}
-                >
-                  <div>
-                    <div className="flex items-center gap-2 text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">
-                      Localizações Distintas <ChevronDown size={12} className={`transition-transform ${isLocationDropdownOpen ? 'rotate-180' : ''}`} />
-                    </div>
-                    <p className="text-5xl font-black text-slate-900">
-                      {selectedLocation === 'Todas' ? uniqueLocations.length - 1 : 1}
-                    </p>
-                    {selectedLocation !== 'Todas' && <span className="text-[10px] font-bold text-red-600 uppercase mt-2 block">Filtro: {selectedLocation}</span>}
-                  </div>
-                  <div className={`p-4 rounded-2xl transition-all ${selectedLocation !== 'Todas' ? 'bg-red-600 text-white' : 'bg-orange-50 text-orange-600 group-hover:bg-orange-600 group-hover:text-white'}`}>
-                    <MapPin size={32} />
-                  </div>
-                </button>
-
-                {isLocationDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-3 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 max-h-64 overflow-y-auto animate-in fade-in slide-in-from-top-2">
-                    <div className="p-2 space-y-1">
-                      {uniqueLocations.map((loc, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => { setSelectedLocation(loc); setIsLocationDropdownOpen(false); }}
-                          className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-between ${selectedLocation === loc ? 'bg-red-50 text-red-700' : 'hover:bg-slate-50 text-slate-600'}`}
-                        >
-                          {loc}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
-              <div className="p-8 border-b border-slate-50 flex items-center justify-between gap-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={22} />
-                  <input 
-                    type="text" 
-                    placeholder="Pesquisar por ODS, AF, Equipamento ou Local..."
-                    className="w-full pl-14 pr-6 py-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-red-500 text-base font-medium transition-all shadow-inner"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-                {(searchTerm || selectedLocation !== 'Todas') && (
-                  <button onClick={() => { setSelectedLocation('Todas'); setSearchTerm(''); }} className="bg-orange-50 text-orange-600 px-4 py-4 rounded-2xl hover:bg-orange-100 transition-colors">
-                    <X size={20} />
-                  </button>
-                )}
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left table-auto">
-                  <thead>
-                    <tr className="bg-slate-50/50">
-                      <th className="px-10 py-6 text-[11px] font-black text-slate-400 uppercase tracking-widest w-48">Identificação</th>
-                      <th className="px-10 py-6 text-[11px] font-black text-slate-400 uppercase tracking-widest">Equipamento</th>
-                      <th className="px-10 py-6 text-[11px] font-black text-slate-400 uppercase tracking-widest">Localização</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredInventory.length > 0 ? filteredInventory.map((item, idx) => {
-                        const af = item["af"] || item["número af"] || item["af dimensional"];
-                        const equipName = item["equipment_2"] || item["equipment"];
-                        const odsCode = item["ods code"] || item["af dimensional"] || "S/ CODIGO";
-                        
-                        return (
-                          <tr key={idx} className="hover:bg-red-50/30 transition-colors group">
-                            <td className="px-10 py-6 align-top">
-                              <div className="flex flex-col gap-1.5">
-                                <span className="inline-block bg-slate-900 text-white px-3 py-1 rounded-lg font-mono text-xs font-bold shadow-sm w-fit whitespace-nowrap">
-                                  {odsCode}
-                                </span>
-                                {af && af !== odsCode && <span className="text-red-600 font-black text-sm tracking-tight px-1 whitespace-nowrap">{af}</span>}
-                              </div>
-                            </td>
-                            <td className="px-10 py-6 align-top min-w-[280px]">
-                              <div className="font-bold text-slate-800 text-base whitespace-normal leading-snug">{equipName}</div>
-                            </td>
-                            <td className="px-10 py-6 align-top">
-                              <div className="flex items-center gap-3 font-semibold italic w-fit px-4 py-2 rounded-xl border bg-slate-50 text-slate-600 border-slate-100">
-                                <MapPin size={16} className="text-red-500 shrink-0" />
-                                <span className="whitespace-normal leading-snug">{item["equipment location"]}</span>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      }) : <tr><td colSpan="3" className="px-10 py-20 text-center text-slate-400 font-medium italic">Nenhum resultado encontrado.</td></tr>}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* --- ABA 2: CHECKLIST DE SEPARAÇÃO (NOVA) --- */}
-        {activeTab === 'dispatch' && !dispatchReportMode && (
-          <div className="animate-in fade-in duration-300 max-w-5xl mx-auto pb-20">
-            <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-8">
+          const handleSaveAndGenerate = async () => {
+            if (!GAS_URL || checklistData.to.trim() === '') {
+              setPrintMessage("Por favor, preencha o destino (Para) antes de guardar.");
+              setTimeout(() => setPrintMessage(''), 5000);
+              return;
+            }
+            
+            setIsSaving(true);
+            try {
+              await fetch(GAS_URL, {
+                method: 'POST',
+                body: JSON.stringify(checklistData),
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+              });
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 border-b border-slate-100 pb-8">
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Data</label>
-                  <input type="date" className="w-full border-none bg-slate-50 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-red-500" value={dispatchData.date} onChange={(e) => setDispatchData({...dispatchData, date: e.target.value})}/>
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Responsável</label>
-                  <input type="text" placeholder="Nome do técnico..." className="w-full border-none bg-slate-50 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-red-500" value={dispatchData.responsible} onChange={(e) => setDispatchData({...dispatchData, responsible: e.target.value})}/>
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Destino / Projeto</label>
-                  <input type="text" placeholder="Cliente / Local..." className="w-full border-none bg-slate-50 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-red-500" value={dispatchData.destination} onChange={(e) => setDispatchData({...dispatchData, destination: e.target.value})}/>
-                </div>
-              </div>
+              const novoDestino = checklistData.to;
+              const idEquipamentosSelecionados = checklistData.selectedEquipments.map(eq => eq.id);
+              
+              setInventory(prevInventory => 
+                prevInventory.map(item => {
+                  if (idEquipamentosSelecionados.includes(item.id)) {
+                    return { ...item, "equipment location": novoDestino };
+                  }
+                  return item;
+                })
+              );
 
-              <div className="mb-8 bg-red-50 p-5 rounded-2xl border border-red-100">
-                <div className="flex flex-col md:flex-row gap-6">
-                  <div className="flex-1">
-                    <label className="block text-xs font-black text-red-800 uppercase tracking-widest mb-2">Categoria do Checklist</label>
-                    <select 
-                      className="w-full bg-white border border-red-200 rounded-xl p-3 text-base font-black uppercase tracking-wide focus:ring-2 focus:ring-red-500"
-                      value={dispatchData.type}
-                      onChange={(e) => setDispatchData({...dispatchData, type: e.target.value})}
-                    >
-                      {Object.keys(CHECKLIST_TEMPLATES).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                    </select>
-                  </div>
-                  
-                  {/* Seletor Automático de Kits FPSO */}
-                  {dispatchData.type === 'Temperatura e Pressão' && (
-                    <div className="flex-1">
-                      <label className="text-xs font-black text-red-800 uppercase tracking-widest mb-2 flex items-center gap-2">
-                        Carregar Kit Predefinido <span className="bg-red-600 text-white px-2 py-0.5 rounded text-[10px]">Automático</span>
-                      </label>
+              setReportMode(true);
+              setTimeout(() => printReport(), 800);
+            } catch (error) {
+              console.error("Erro ao guardar no Sheets:", error);
+              setPrintMessage("Erro ao comunicar com a folha de cálculo. A gerar relatório offline.");
+              setTimeout(() => setPrintMessage(''), 5000);
+              setReportMode(true);
+            } finally {
+              setIsSaving(false);
+            }
+          };
+
+          const isDryBlock = checklistData.selectedEquipments.some(eq => {
+            const name = (eq.equipment || eq.equipment_2 || "").toLowerCase();
+            return name.includes('dry block') || name.includes('bloco seco');
+          });
+          const isBarometer = checklistData.selectedEquipments.some(eq => {
+            const name = (eq.equipment || eq.equipment_2 || "").toLowerCase();
+            return name.includes('barometer') || name.includes('barômetro');
+          });
+          const isCaliper = checklistData.selectedEquipments.some(eq => {
+            const name = (eq.equipment || eq.equipment_2 || "").toLowerCase();
+            return name.includes('caliper') || name.includes('paquímetro');
+          });
+
+          const availableEquipmentsForChecklist = inventory.filter(item => {
+            const loc = String(item["equipment location"] || "").toLowerCase();
+            const isLab = loc.includes('ods lab') || loc === 'ods';
+            const matchesType = checklistData.type === 'OUT' ? isLab : !isLab;
+            
+            if (!matchesType) return false;
+
+            if (equipmentSearchTerm) {
+              const searchStr = equipmentSearchTerm.toLowerCase();
+              const afValue = String(item["af"] || item["número af"] || item["af dimensional"] || "").toLowerCase();
+              const equipName = String(item["equipment"] || item["equipment_2"] || "").toLowerCase();
+              
+              return (
+                equipName.includes(searchStr) || 
+                String(item["ods code"] || "").toLowerCase().includes(searchStr) ||
+                afValue.includes(searchStr)
+              );
+            }
+            return true;
+          });
+
+          const renderDispatchRows = () => {
+            return CHECKLIST_TEMPLATES[dispatchData.type].map((item, idx) => {
+              let cleanItemNames = item.name
+                .toLowerCase()
+                .split('(')[0]
+                .split('- qtd')[0]
+                .split('- ver aba')[0]
+                .split('/')
+                .map(s => s.trim());
+
+              const isManometer = item.name.includes("Kit de Manômetros");
+              const isBoreGauge = item.name.includes("Bore Gauge");
+              const isDryBlock = item.name.includes("Dry Block Calibrator");
+              
+              const isMulti = isManometer || isBoreGauge || isDryBlock;
+
+              if (isManometer) {
+                cleanItemNames = ["manometer", "manômetro"];
+              } else if (isBoreGauge) {
+                cleanItemNames = ["bore gauge", "bore gage", "dial gauge", "dial gage"];
+              }
+
+              let filteredOptions = inventory.filter(inv => {
+                const invName = String(inv["equipment_2"] || inv["equipment"] || inv["equipamento"] || "").toLowerCase();
+                
+                if (item.name === "Caliper" && invName.includes("hook caliper")) {
+                  return false;
+                }
+
+                return cleanItemNames.some(cleanName => invName.includes(cleanName) || cleanName.includes(invName));
+              });
+
+              if (filteredOptions.length === 0) {
+                filteredOptions = inventory;
+              }
+
+              return (
+                <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                  <td className="p-4 font-bold text-slate-800">{item.name}</td>
+                  <td className="p-4 text-slate-500 text-xs italic">{item.accessories}</td>
+                  <td className="p-4">
+                    {isMulti ? (
+                      <div className="flex flex-col gap-2">
+                        <select 
+                          className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-semibold focus:ring-2 focus:ring-red-500"
+                          value=""
+                          onChange={(e) => handleDispatchItemArrayChange(item.name, e.target.value)}
+                        >
+                          <option value="">-- Adicionar ODS --</option>
+                          {filteredOptions.map(inv => (
+                            <option key={inv.id} value={inv["ods code"]}>
+                              {inv["ods code"]} {inv.af ? `(${inv.af})` : ''} - {inv.equipment || inv.equipment_2}
+                            </option>
+                          ))}
+                        </select>
+                        
+                        {dispatchData.items[item.name]?.codes?.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {dispatchData.items[item.name].codes.map(c => (
+                              <span key={c} className="bg-red-50 text-red-700 px-2 py-1 rounded-md text-[10px] font-bold border border-red-200 flex items-center gap-1.5 shadow-sm">
+                                {c}
+                                <button 
+                                  onClick={() => handleRemoveDispatchItemArray(item.name, c)}
+                                  className="bg-red-200 hover:bg-red-300 rounded-full p-0.5 transition-colors"
+                                >
+                                  <X size={10} className="text-red-800" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
                       <select 
-                        className="w-full bg-white border border-red-200 rounded-xl p-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-red-500"
-                        value={dispatchData.selectedKit || ''}
-                        onChange={handleKitSelection}
+                        className={`w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-semibold focus:ring-2 focus:ring-red-500 ${dispatchData.items[item.name]?.code ? 'border-red-400 bg-red-50' : ''}`}
+                        value={dispatchData.items[item.name]?.code || ''}
+                        onChange={(e) => handleDispatchItemChange(item.name, 'code', e.target.value)}
                       >
-                        <option value="">-- Preenchimento Manual --</option>
-                        {Object.keys(KITS_FPSO).map(kit => (
-                          <option key={kit} value={kit}>{kit}</option>
+                        <option value="">-- Selecionar ODS / N/A --</option>
+                        {filteredOptions.map(inv => (
+                          <option key={inv.id} value={inv["ods code"]}>
+                            {inv["ods code"]} {inv.af ? `(${inv.af})` : ''} - {inv.equipment || inv.equipment_2}
+                          </option>
                         ))}
                       </select>
-                    </div>
-                  )}
-                </div>
-              </div>
+                    )}
+                  </td>
+                  <td className="p-4">
+                    <input 
+                      type="text" 
+                      className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-red-500" 
+                      placeholder="OK / Status..."
+                      value={dispatchData.items[item.name]?.obs || ''}
+                      onChange={(e) => handleDispatchItemChange(item.name, 'obs', e.target.value)}
+                    />
+                  </td>
+                </tr>
+              );
+            });
+          };
 
-              <div className="overflow-x-auto border border-slate-200 rounded-xl mb-8 shadow-sm">
-                <table className="w-full text-left text-sm table-auto">
-                  <thead>
-                    <tr className="bg-slate-100">
-                      <th className="p-4 font-black text-slate-600 uppercase tracking-wider text-xs">Equipamento</th>
-                      <th className="p-4 font-black text-slate-600 uppercase tracking-wider text-xs">Acessórios Necessários</th>
-                      <th className="p-4 font-black text-slate-600 uppercase tracking-wider text-xs w-64 text-center">Vincular Código (Inventário)</th>
-                      <th className="p-4 font-black text-slate-600 uppercase tracking-wider text-xs w-48">Observação</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {renderDispatchRows()}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 mb-8">
-                <h3 className="font-black text-slate-700 uppercase tracking-widest text-xs mb-4">Itens Gerais de Verificação</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {Object.entries({
-                    limpos: 'Equipamentos limpos',
-                    carregadores: 'Carregadores carregando',
-                    cabos: 'Cabos sem danos',
-                    certificado: 'Certificado de calibração válido',
-                    maleta: 'Maleta / Case'
-                  }).map(([key, label]) => (
-                    <label key={key} className="flex items-center gap-3 cursor-pointer group bg-white p-3 rounded-xl border border-slate-200 hover:border-red-300 transition-colors shadow-sm">
-                      <input 
-                        type="checkbox" 
-                        className="rounded w-5 h-5 text-red-600 focus:ring-red-500 border-slate-300"
-                        checked={dispatchData.checks[key]}
-                        onChange={(e) => handleDispatchCheckChange(key, e.target.checked)}
-                      />
-                      <span className="text-sm font-semibold text-slate-700 group-hover:text-slate-900">{label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <button 
-                onClick={handlePrintDispatch}
-                className="w-full bg-red-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-red-700 transition-colors flex justify-center items-center gap-3 shadow-lg shadow-red-600/30"
-              >
-                Imprimir Checklist e Transferir para IN/OUT <Printer size={20} />
-              </button>
-
-            </div>
-          </div>
-        )}
-
-        {/* --- IMPRESSÃO CHECKLIST DE SEPARAÇÃO --- */}
-        {dispatchReportMode && activeTab === 'dispatch' && (
-          <div className="max-w-4xl mx-auto bg-white rounded-none md:rounded-[2rem] shadow-none md:shadow-xl border-0 md:border border-slate-200 p-8 md:p-12 print:p-0 print:shadow-none print:border-0 print:max-w-none">
-            
-            <div className="flex justify-between items-center mb-8 pb-8 border-b border-dashed border-slate-200 print:hidden">
-              <button onClick={() => setDispatchReportMode(false)} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 font-bold transition-colors">
-                <ArrowLeft size={20} /> Voltar ao Formulário
-              </button>
-              <button onClick={printReport} className="flex items-center gap-2 bg-red-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-red-700 transition-colors">
-                <Printer size={20} /> Imprimir / PDF
-              </button>
-            </div>
-
-            <div className="flex justify-between items-center mb-8 border-b-2 border-slate-800 pb-4">
-              <img 
-                src="/dog%20ods.png" 
-                alt="ODS Metering Systems Logo" 
-                className="h-12 w-auto" 
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
-              <div className="text-right">
-                <h1 className="text-xl font-black uppercase">Checklist - Equipment Dispatch Verification</h1>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mb-6 border border-slate-800 p-4 font-semibold text-sm">
-              <div><span className="font-bold">Data:</span> {dispatchData.date}</div>
-              <div><span className="font-bold">Responsável:</span> {dispatchData.responsible}</div>
-              <div className="col-span-2"><span className="font-bold">Destino/Projeto:</span> {dispatchData.destination}</div>
-            </div>
-
-            <div className="mb-8">
-              <h2 className="bg-slate-800 text-white p-2 font-bold uppercase tracking-widest text-center text-sm">
-                {dispatchData.type} {dispatchData.selectedKit ? `- ${dispatchData.selectedKit}` : ''}
-              </h2>
-              <table className="w-full text-left text-xs border-collapse border border-slate-800">
-                <thead>
-                  <tr className="bg-slate-100">
-                    <th className="border border-slate-800 p-2 uppercase w-1/3">Equipamento</th>
-                    <th className="border border-slate-800 p-2 uppercase w-1/4">Acessórios</th>
-                    <th className="border border-slate-800 p-2 uppercase text-center w-1/4">Código do Equipamento</th>
-                    <th className="border border-slate-800 p-2 uppercase">Observação</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {CHECKLIST_TEMPLATES[dispatchData.type].map((item, idx) => {
-                    const itemData = dispatchData.items[item.name] || {};
-                    const isMulti = item.name.includes("Kit de Manômetros") || item.name.includes("Bore Gauge") || item.name.includes("Dry Block");
-                    
-                    return (
-                      <tr key={idx}>
-                        <td className="border border-slate-800 p-2 font-bold">{item.name}</td>
-                        <td className="border border-slate-800 p-2 italic text-slate-600">{item.accessories}</td>
-                        <td className="border border-slate-800 p-2 font-bold text-center">
-                          {isMulti ? (itemData.codes ? itemData.codes.join(" | ") : '') : (itemData.code || '')}
-                        </td>
-                        <td className="border border-slate-800 p-2">{itemData.obs || ''}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div>
-              <h3 className="bg-slate-200 text-slate-800 p-2 font-bold uppercase tracking-widest text-sm border border-b-0 border-slate-800">Itens</h3>
-              <table className="w-full text-left text-xs border-collapse border border-slate-800">
-                <thead>
-                  <tr className="bg-slate-100">
-                    <th className="border border-slate-800 p-2 uppercase">Equipamentos</th>
-                    <th className="border border-slate-800 p-2 uppercase text-center w-32">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr><td className="border border-slate-800 p-2 font-semibold">Equipamentos limpos</td><td className="border border-slate-800 p-2 text-center font-bold">{dispatchData.checks.limpos ? 'OK' : ''}</td></tr>
-                  <tr><td className="border border-slate-800 p-2 font-semibold">Carregadores carregando</td><td className="border border-slate-800 p-2 text-center font-bold">{dispatchData.checks.carregadores ? 'OK' : ''}</td></tr>
-                  <tr><td className="border border-slate-800 p-2 font-semibold">Cabos sem danos</td><td className="border border-slate-800 p-2 text-center font-bold">{dispatchData.checks.cabos ? 'OK' : ''}</td></tr>
-                  <tr><td className="border border-slate-800 p-2 font-semibold">Certificado de calibração válido</td><td className="border border-slate-800 p-2 text-center font-bold">{dispatchData.checks.certificado ? 'OK' : ''}</td></tr>
-                  <tr><td className="border border-slate-800 p-2 font-semibold">Maleta / Case</td><td className="border border-slate-800 p-2 text-center font-bold">{dispatchData.checks.maleta ? 'OK' : ''}</td></tr>
-                </tbody>
-              </table>
-            </div>
-
-          </div>
-        )}
-
-        {/* --- ABA 3: RELATÓRIO IN/OUT --- */}
-        {activeTab === 'checklist' && !reportMode && (
-          <div className="animate-in fade-in duration-300 max-w-4xl mx-auto pb-20">
-            <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-8">
+          return (
+            <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex print:bg-white print:m-0">
               
-              <div className="flex items-center justify-between border-b border-slate-100 pb-6 mb-6">
-                <div className="flex bg-slate-100 p-1 rounded-xl">
-                  <button onClick={() => handleTypeChange('OUT')} className={`px-6 py-2.5 rounded-lg text-sm font-black uppercase tracking-wider transition-all ${checklistData.type === 'OUT' ? 'bg-white shadow-sm text-red-600' : 'text-slate-400 hover:text-slate-600'}`}>Saída (OUT)</button>
-                  <button onClick={() => handleTypeChange('IN')} className={`px-6 py-2.5 rounded-lg text-sm font-black uppercase tracking-wider transition-all ${checklistData.type === 'IN' ? 'bg-white shadow-sm text-orange-600' : 'text-slate-400 hover:text-slate-600'}`}>Entrada (IN)</button>
+              {printMessage && (
+                <div className="fixed bottom-6 right-6 bg-slate-800 text-white px-6 py-4 rounded-2xl shadow-2xl z-50 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 border border-slate-700 max-w-sm print:hidden">
+                  <Info className="text-orange-400 shrink-0" size={24} />
+                  <p className="text-sm font-semibold">{printMessage}</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Data</p>
-                  <input type="date" className="border-none bg-slate-50 rounded-lg px-3 py-2 text-sm font-bold mt-1" value={checklistData.date} onChange={(e) => handleInOutChange('date', e.target.value)}/>
-                </div>
-              </div>
+              )}
 
-              {/* Informações Básicas */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Origem / Destino</label>
-                  <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl relative">
-                    <input 
-                      list="locations-list"
-                      type="text" 
-                      placeholder="De..." 
-                      className="w-full bg-transparent border-none text-sm font-semibold focus:ring-0 p-0" 
-                      value={checklistData.from} 
-                      onChange={(e) => handleInOutChange('from', e.target.value)} 
+              <aside className="fixed inset-y-0 left-0 w-64 bg-slate-900 text-white p-6 hidden lg:flex flex-col shadow-2xl print:hidden z-10">
+                <div className="flex items-center gap-3 mb-10">
+                  <div className="bg-white p-2 rounded-xl shadow-lg shadow-red-500/20 flex justify-center items-center">
+                    <img 
+                      src="dog%20ods.png" 
+                      alt="ODS Metering Systems Logo" 
+                      className="h-8 w-auto" 
+                      onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }}
                     />
-                    <ArrowRight size={16} className="text-slate-400 shrink-0" />
-                    <input 
-                      list="locations-list"
-                      type="text" 
-                      placeholder="Para..." 
-                      className="w-full bg-transparent border-none text-sm font-semibold focus:ring-0 p-0" 
-                      value={checklistData.to} 
-                      onChange={(e) => handleInOutChange('to', e.target.value)} 
-                    />
-                    
-                    <datalist id="locations-list">
-                      {uniqueLocations.filter(loc => loc !== 'Todas').map((loc, idx) => (
-                        <option key={idx} value={loc} />
-                      ))}
-                    </datalist>
+                    <Package size={24} className="text-red-600 hidden" />
                   </div>
+                  <h1 className="text-xl font-black tracking-tight uppercase">ODS Metering Systems</h1>
                 </div>
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Finalidade</label>
-                  <select className="w-full bg-slate-50 border-none rounded-xl p-3 text-sm font-semibold focus:ring-2 focus:ring-red-500" value={checklistData.objective} onChange={(e) => handleInOutChange('objective', e.target.value)}>
-                    <option>Serviços de calibração</option>
-                    <option>Calibração do padrão</option>
-                    <option>Manutenção</option>
-                    <option>Outros</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Seleção de Múltiplos Equipamentos */}
-              <div className="mb-8 bg-red-50 p-6 rounded-2xl border border-red-100">
-                <label className="block text-xs font-black text-red-800 uppercase tracking-widest mb-3">Vincular Equipamentos do Inventário</label>
                 
-                <div className="relative mb-3">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-red-400" size={18} />
-                  <input 
-                    type="text" 
-                    placeholder="Pesquisar equipamento (Ex: AF 0285, Caliper...)" 
-                    className="w-full pl-12 pr-4 py-3 bg-white border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-red-500 shadow-sm"
-                    value={equipmentSearchTerm}
-                    onChange={(e) => setEquipmentSearchTerm(e.target.value)}
-                  />
+                <nav className="flex-1 space-y-2">
+                  <button 
+                    onClick={() => { setActiveTab('inventory'); setReportMode(false); setDispatchReportMode(false); }}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'inventory' ? 'bg-red-600 shadow-lg' : 'hover:bg-slate-800 text-slate-400'}`}
+                  >
+                    <LayoutDashboard size={20} /> Inventário ODS
+                  </button>
+                  
+                  <button 
+                    onClick={() => { setActiveTab('dispatch'); setReportMode(false); setDispatchReportMode(false); }}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'dispatch' ? 'bg-red-600 shadow-lg' : 'hover:bg-slate-800 text-slate-400'}`}
+                  >
+                    <ClipboardList size={20} /> Checklist de Saída
+                  </button>
+
+                  <button 
+                    onClick={() => { setActiveTab('checklist'); setReportMode(false); setDispatchReportMode(false); }}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'checklist' ? 'bg-red-600 shadow-lg' : 'hover:bg-slate-800 text-slate-400'}`}
+                  >
+                    <ClipboardCheck size={20} /> Relatório IN/OUT
+                  </button>
+                </nav>
+
+                <div className="mt-auto p-5 bg-slate-800/40 rounded-2xl border border-slate-700/50">
+                   <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest mb-2 text-red-400">
+                     <FileSpreadsheet size={14} /> Base de Dados
+                   </div>
+                   <p className="text-[11px] text-orange-400 font-bold">Sincronização OK</p>
                 </div>
+              </aside>
 
-                <select 
-                  className="w-full bg-white border-none rounded-xl p-4 text-sm font-bold shadow-sm focus:ring-2 focus:ring-red-500 mb-4"
-                  onChange={handleAddEquipment}
-                  value=""
-                >
-                  <option value="" disabled>-- Selecione um equipamento para adicionar --</option>
-                  {availableEquipmentsForChecklist.map(item => {
-                    const equipName = item["equipment_2"] || item["equipment"];
-                    const af = item["af"] || item["número af"] || item["af dimensional"];
-                    const code = item["ods code"] || item["af dimensional"] || "S/ CODIGO";
-                    return (
-                      <option key={item.id} value={item.id}>
-                        {code} {af && af !== code ? `(${af})` : ''} - {equipName}
-                      </option>
-                    );
-                  })}
-                </select>
+              <main className="flex-1 lg:ml-64 p-4 md:p-8 print:p-0 print:m-0 w-full">
+                
+                {(!reportMode && !dispatchReportMode) && (
+                  <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10 print:hidden">
+                    <div>
+                      <h2 className="text-3xl font-black text-slate-800 tracking-tight italic uppercase">
+                        {activeTab === 'inventory' && 'Localização de Equipamentos'}
+                        {activeTab === 'dispatch' && 'Checklist de Verificação de Saída'}
+                        {activeTab === 'checklist' && 'Relatório Oficial de Entrada e Saída'}
+                      </h2>
+                      {activeTab === 'inventory' && (
+                        <div className="flex items-center gap-2 mt-1">
+                          <div className={`h-2 w-2 rounded-full ${loading ? 'bg-red-500 animate-pulse' : 'bg-orange-500'}`}></div>
+                          <p className="text-slate-500 text-xs font-bold uppercase tracking-wide">
+                            {loading ? 'A sincronizar...' : 'Dados Sincronizados'}
+                          </p>
+                        </div>
+                      )}
+                    </div>
 
-                {checklistData.selectedEquipments.length > 0 && (
-                  <div className="space-y-3 mt-4">
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Equipamentos no Relatório ({checklistData.selectedEquipments.length}):</p>
-                    {checklistData.selectedEquipments.map((eq, index) => {
-                      const equipName = eq["equipment_2"] || eq["equipment"];
-                      const af = eq["af"] || eq["número af"] || eq["af dimensional"];
-                      const code = eq["ods code"] || eq["af dimensional"] || "S/ CODIGO";
-                      
-                      return (
-                        <div key={eq.id} className="flex flex-col md:flex-row justify-between gap-4 text-sm bg-white p-4 rounded-xl shadow-sm border border-slate-100">
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-50">
-                              <span className="font-bold text-slate-800">
-                                <span className="bg-slate-800 text-white px-2 py-0.5 rounded text-[10px] mr-2">{index + 1}</span>
-                                {code} {af && af !== code ? `(${af})` : ''} - {equipName}
-                              </span>
-                              <button onClick={() => handleRemoveEquipment(eq.id)} className="text-orange-500 hover:text-orange-700 hover:bg-orange-50 p-1.5 rounded-lg transition-colors">
-                                <Trash2 size={16} />
-                              </button>
+                    {activeTab === 'inventory' && (
+                      <button 
+                        onClick={fetchData}
+                        disabled={loading}
+                        className="bg-white border border-slate-200 p-3 rounded-xl hover:bg-slate-50 transition shadow-sm active:scale-90"
+                      >
+                        <RefreshCw size={20} className={loading ? "animate-spin text-red-600" : "text-slate-600"} />
+                      </button>
+                    )}
+                  </header>
+                )}
+
+                {/* --- ABA 1: INVENTÁRIO --- */}
+                {activeTab === 'inventory' && !reportMode && !dispatchReportMode && (
+                  <div className="animate-in fade-in duration-300">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+                      <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex items-center justify-between group hover:border-red-200 transition-colors">
+                        <div>
+                          <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">
+                            {searchTerm || selectedLocation !== 'Todas' ? 'Resultados Encontrados' : 'Equipamentos Totais'}
+                          </h3>
+                          <p className={`text-5xl font-black ${searchTerm || selectedLocation !== 'Todas' ? 'text-red-600' : 'text-slate-900'}`}>
+                            {filteredInventory.length}
+                          </p>
+                        </div>
+                        <div className="p-4 rounded-2xl bg-red-50 text-red-600 group-hover:bg-red-600 group-hover:text-white transition-all">
+                          <ListIcon size={32} />
+                        </div>
+                      </div>
+
+                      <div className="relative" ref={dropdownRef}>
+                        <button 
+                          onClick={() => setIsLocationDropdownOpen(!isLocationDropdownOpen)}
+                          className={`w-full bg-white p-8 rounded-3xl shadow-sm border flex items-center justify-between group transition-all text-left ${selectedLocation !== 'Todas' ? 'border-red-500 ring-2 ring-red-50' : 'border-slate-100 hover:border-orange-200'}`}
+                        >
+                          <div>
+                            <div className="flex items-center gap-2 text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">
+                              Localizações Distintas <ChevronDown size={12} className={`transition-transform ${isLocationDropdownOpen ? 'rotate-180' : ''}`} />
                             </div>
-                            <div className="flex flex-col md:flex-row gap-4 mt-2">
-                              <div className="flex-1">
-                                <span className="text-slate-400 font-bold block text-[10px] uppercase">Acessórios Esperados:</span>
-                                <span className="font-semibold text-slate-700 text-xs">{getExpectedAccessories(equipName)}</span>
-                              </div>
-                              <div className="flex-1">
-                                <span className="text-slate-400 font-bold block text-[10px] uppercase">Local Atual:</span>
-                                <span className="font-semibold text-slate-700 text-xs">{eq["equipment location"]}</span>
-                              </div>
+                            <p className="text-5xl font-black text-slate-900">
+                              {selectedLocation === 'Todas' ? uniqueLocations.length - 1 : 1}
+                            </p>
+                            {selectedLocation !== 'Todas' && <span className="text-[10px] font-bold text-red-600 uppercase mt-2 block">Filtro: {selectedLocation}</span>}
+                          </div>
+                          <div className={`p-4 rounded-2xl transition-all ${selectedLocation !== 'Todas' ? 'bg-red-600 text-white' : 'bg-orange-50 text-orange-600 group-hover:bg-orange-600 group-hover:text-white'}`}>
+                            <MapPin size={32} />
+                          </div>
+                        </button>
+
+                        {isLocationDropdownOpen && (
+                          <div className="absolute top-full left-0 right-0 mt-3 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 max-h-64 overflow-y-auto animate-in fade-in slide-in-from-top-2 custom-scrollbar">
+                            <div className="p-2 space-y-1">
+                              {uniqueLocations.map((loc, idx) => (
+                                <button
+                                  key={idx}
+                                  onClick={() => { setSelectedLocation(loc); setIsLocationDropdownOpen(false); }}
+                                  className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-between ${selectedLocation === loc ? 'bg-red-50 text-red-700' : 'hover:bg-slate-50 text-slate-600'}`}
+                                >
+                                  {loc}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
+                      <div className="p-8 border-b border-slate-50 flex items-center justify-between gap-4">
+                        <div className="relative flex-1">
+                          <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={22} />
+                          <input 
+                            type="text" 
+                            placeholder="Pesquisar por ODS, AF, Equipamento ou Local..."
+                            className="w-full pl-14 pr-6 py-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-red-500 text-base font-medium transition-all shadow-inner"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                          />
+                        </div>
+                        {(searchTerm || selectedLocation !== 'Todas') && (
+                          <button onClick={() => { setSelectedLocation('Todas'); setSearchTerm(''); }} className="bg-orange-50 text-orange-600 px-4 py-4 rounded-2xl hover:bg-orange-100 transition-colors">
+                            <X size={20} />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left table-auto">
+                          <thead>
+                            <tr className="bg-slate-50/50">
+                              <th className="px-10 py-6 text-[11px] font-black text-slate-400 uppercase tracking-widest w-48">Identificação</th>
+                              <th className="px-10 py-6 text-[11px] font-black text-slate-400 uppercase tracking-widest">Equipamento</th>
+                              <th className="px-10 py-6 text-[11px] font-black text-slate-400 uppercase tracking-widest">Localização</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {filteredInventory.length > 0 ? filteredInventory.map((item, idx) => {
+                                const af = item["af"] || item["número af"] || item["af dimensional"];
+                                const equipName = item["equipment_2"] || item["equipment"];
+                                const odsCode = item["ods code"] || item["af dimensional"] || "S/ CODIGO";
+                                
+                                return (
+                                  <tr key={idx} className="hover:bg-red-50/30 transition-colors group">
+                                    <td className="px-10 py-6 align-top">
+                                      <div className="flex flex-col gap-1.5">
+                                        <span className="inline-block bg-slate-900 text-white px-3 py-1 rounded-lg font-mono text-xs font-bold shadow-sm w-fit whitespace-nowrap">
+                                          {odsCode}
+                                        </span>
+                                        {af && af !== odsCode && <span className="text-red-600 font-black text-sm tracking-tight px-1 whitespace-nowrap">{af}</span>}
+                                      </div>
+                                    </td>
+                                    <td className="px-10 py-6 align-top min-w-[280px]">
+                                      <div className="font-bold text-slate-800 text-base whitespace-normal leading-snug">{equipName}</div>
+                                    </td>
+                                    <td className="px-10 py-6 align-top">
+                                      <div className="flex items-center gap-3 font-semibold italic w-fit px-4 py-2 rounded-xl border bg-slate-50 text-slate-600 border-slate-100">
+                                        <MapPin size={16} className="text-red-500 shrink-0" />
+                                        <span className="whitespace-normal leading-snug">{item["equipment location"]}</span>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              }) : <tr><td colSpan="3" className="px-10 py-20 text-center text-slate-400 font-medium italic">Nenhum resultado encontrado.</td></tr>}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* --- ABA 2: CHECKLIST DE SEPARAÇÃO --- */}
+                {activeTab === 'dispatch' && !dispatchReportMode && (
+                  <div className="animate-in fade-in duration-300 max-w-5xl mx-auto pb-20">
+                    <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-8">
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 border-b border-slate-100 pb-8">
+                        <div>
+                          <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Data</label>
+                          <input type="date" className="w-full border-none bg-slate-50 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-red-500" value={dispatchData.date} onChange={(e) => setDispatchData({...dispatchData, date: e.target.value})}/>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Responsável</label>
+                          <input type="text" placeholder="Nome do técnico..." className="w-full border-none bg-slate-50 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-red-500" value={dispatchData.responsible} onChange={(e) => setDispatchData({...dispatchData, responsible: e.target.value})}/>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Destino / Projeto</label>
+                          <input type="text" placeholder="Cliente / Local..." className="w-full border-none bg-slate-50 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-red-500" value={dispatchData.destination} onChange={(e) => setDispatchData({...dispatchData, destination: e.target.value})}/>
+                        </div>
+                      </div>
+
+                      <div className="mb-8 bg-red-50 p-5 rounded-2xl border border-red-100">
+                        <div className="flex flex-col md:flex-row gap-6">
+                          <div className="flex-1">
+                            <label className="block text-xs font-black text-red-800 uppercase tracking-widest mb-2">Categoria do Checklist</label>
+                            <select 
+                              className="w-full bg-white border border-red-200 rounded-xl p-3 text-base font-black uppercase tracking-wide focus:ring-2 focus:ring-red-500"
+                              value={dispatchData.type}
+                              onChange={(e) => setDispatchData({...dispatchData, type: e.target.value})}
+                            >
+                              {Object.keys(CHECKLIST_TEMPLATES).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                            </select>
+                          </div>
+                          
+                          {dispatchData.type === 'Temperatura e Pressão' && (
+                            <div className="flex-1">
+                              <label className="text-xs font-black text-red-800 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                Carregar Kit Predefinido <span className="bg-red-600 text-white px-2 py-0.5 rounded text-[10px]">Automático</span>
+                              </label>
+                              <select 
+                                className="w-full bg-white border border-red-200 rounded-xl p-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-red-500"
+                                value={dispatchData.selectedKit || ''}
+                                onChange={handleKitSelection}
+                              >
+                                <option value="">-- Preenchimento Manual --</option>
+                                {Object.keys(KITS_FPSO).map(kit => (
+                                  <option key={kit} value={kit}>{kit}</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto custom-scrollbar border border-slate-200 rounded-xl mb-8 shadow-sm">
+                        <table className="w-full text-left text-sm table-auto">
+                          <thead>
+                            <tr className="bg-slate-100">
+                              <th className="p-4 font-black text-slate-600 uppercase tracking-wider text-xs">Equipamento</th>
+                              <th className="p-4 font-black text-slate-600 uppercase tracking-wider text-xs">Acessórios Necessários</th>
+                              <th className="p-4 font-black text-slate-600 uppercase tracking-wider text-xs w-64 text-center">Vincular Código (Inventário)</th>
+                              <th className="p-4 font-black text-slate-600 uppercase tracking-wider text-xs w-48">Observação</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {renderDispatchRows()}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 mb-8">
+                        <h3 className="font-black text-slate-700 uppercase tracking-widest text-xs mb-4">Itens Gerais de Verificação</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                          {Object.entries({
+                            limpos: 'Equipamentos limpos',
+                            carregadores: 'Carregadores carregando',
+                            cabos: 'Cabos sem danos',
+                            certificado: 'Certificado de calibração válido',
+                            maleta: 'Maleta / Case'
+                          }).map(([key, label]) => (
+                            <label key={key} className="flex items-center gap-3 cursor-pointer group bg-white p-3 rounded-xl border border-slate-200 hover:border-red-300 transition-colors shadow-sm">
+                              <input 
+                                type="checkbox" 
+                                className="rounded w-5 h-5 text-red-600 focus:ring-red-500 border-slate-300"
+                                checked={dispatchData.checks[key]}
+                                onChange={(e) => handleDispatchCheckChange(key, e.target.checked)}
+                              />
+                              <span className="text-sm font-semibold text-slate-700 group-hover:text-slate-900">{label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <button 
+                        onClick={handlePrintDispatch}
+                        className="w-full bg-red-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-red-700 transition-colors flex justify-center items-center gap-3 shadow-lg shadow-red-600/30"
+                      >
+                        Imprimir Checklist e Transferir para IN/OUT <Printer size={20} />
+                      </button>
+
+                    </div>
+                  </div>
+                )}
+
+                {/* --- IMPRESSÃO CHECKLIST DE SEPARAÇÃO --- */}
+                {dispatchReportMode && activeTab === 'dispatch' && (
+                  <div className="max-w-4xl mx-auto bg-white rounded-none md:rounded-[2rem] shadow-none md:shadow-xl border-0 md:border border-slate-200 p-8 md:p-12 print:p-0 print:shadow-none print:border-0 print:max-w-none print-area">
+                    
+                    <div className="flex justify-between items-center mb-8 pb-8 border-b border-dashed border-slate-200 print:hidden">
+                      <button onClick={() => setDispatchReportMode(false)} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 font-bold transition-colors">
+                        <ArrowLeft size={20} /> Voltar ao Formulário
+                      </button>
+                      <button onClick={printReport} className="flex items-center gap-2 bg-red-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-red-700 transition-colors">
+                        <Printer size={20} /> Imprimir / PDF
+                      </button>
+                    </div>
+
+                    <div className="flex justify-between items-center mb-8 border-b-2 border-slate-800 pb-4">
+                      <img 
+                        src="dog%20ods.png" 
+                        alt="ODS Metering Systems Logo" 
+                        className="h-12 w-auto" 
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                      <div className="text-right">
+                        <h1 className="text-xl font-black uppercase">Checklist - Equipment Dispatch Verification</h1>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 mb-6 border border-slate-800 p-4 font-semibold text-sm">
+                      <div><span className="font-bold">Data:</span> {dispatchData.date}</div>
+                      <div><span className="font-bold">Responsável:</span> {dispatchData.responsible}</div>
+                      <div className="col-span-2"><span className="font-bold">Destino/Projeto:</span> {dispatchData.destination}</div>
+                    </div>
+
+                    <div className="mb-8">
+                      <h2 className="bg-slate-800 text-white p-2 font-bold uppercase tracking-widest text-center text-sm">
+                        {dispatchData.type} {dispatchData.selectedKit ? `- ${dispatchData.selectedKit}` : ''}
+                      </h2>
+                      <table className="w-full text-left text-xs border-collapse border border-slate-800">
+                        <thead>
+                          <tr className="bg-slate-100">
+                            <th className="border border-slate-800 p-2 uppercase w-1/3">Equipamento</th>
+                            <th className="border border-slate-800 p-2 uppercase w-1/4">Acessórios</th>
+                            <th className="border border-slate-800 p-2 uppercase text-center w-1/4">Código do Equipamento</th>
+                            <th className="border border-slate-800 p-2 uppercase">Observação</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {CHECKLIST_TEMPLATES[dispatchData.type].map((item, idx) => {
+                            const itemData = dispatchData.items[item.name] || {};
+                            const isMulti = item.name.includes("Kit de Manômetros") || item.name.includes("Bore Gauge") || item.name.includes("Dry Block");
+                            
+                            return (
+                              <tr key={idx}>
+                                <td className="border border-slate-800 p-2 font-bold">{item.name}</td>
+                                <td className="border border-slate-800 p-2 italic text-slate-600">{item.accessories}</td>
+                                <td className="border border-slate-800 p-2 font-bold text-center">
+                                  {isMulti ? (itemData.codes ? itemData.codes.join(" | ") : '') : (itemData.code || '')}
+                                </td>
+                                <td className="border border-slate-800 p-2">{itemData.obs || ''}</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div>
+                      <h3 className="bg-slate-200 text-slate-800 p-2 font-bold uppercase tracking-widest text-sm border border-b-0 border-slate-800">Itens</h3>
+                      <table className="w-full text-left text-xs border-collapse border border-slate-800">
+                        <thead>
+                          <tr className="bg-slate-100">
+                            <th className="border border-slate-800 p-2 uppercase">Equipamentos</th>
+                            <th className="border border-slate-800 p-2 uppercase text-center w-32">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr><td className="border border-slate-800 p-2 font-semibold">Equipamentos limpos</td><td className="border border-slate-800 p-2 text-center font-bold">{dispatchData.checks.limpos ? 'OK' : ''}</td></tr>
+                          <tr><td className="border border-slate-800 p-2 font-semibold">Carregadores carregando</td><td className="border border-slate-800 p-2 text-center font-bold">{dispatchData.checks.carregadores ? 'OK' : ''}</td></tr>
+                          <tr><td className="border border-slate-800 p-2 font-semibold">Cabos sem danos</td><td className="border border-slate-800 p-2 text-center font-bold">{dispatchData.checks.cabos ? 'OK' : ''}</td></tr>
+                          <tr><td className="border border-slate-800 p-2 font-semibold">Certificado de calibração válido</td><td className="border border-slate-800 p-2 text-center font-bold">{dispatchData.checks.certificado ? 'OK' : ''}</td></tr>
+                          <tr><td className="border border-slate-800 p-2 font-semibold">Maleta / Case</td><td className="border border-slate-800 p-2 text-center font-bold">{dispatchData.checks.maleta ? 'OK' : ''}</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                  </div>
+                )}
+
+                {/* --- ABA 3: RELATÓRIO IN/OUT --- */}
+                {activeTab === 'checklist' && !reportMode && (
+                  <div className="animate-in fade-in duration-300 max-w-4xl mx-auto pb-20">
+                    <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-8">
+                      
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-6 mb-6">
+                        <div className="flex bg-slate-100 p-1 rounded-xl">
+                          <button onClick={() => handleTypeChange('OUT')} className={`px-6 py-2.5 rounded-lg text-sm font-black uppercase tracking-wider transition-all ${checklistData.type === 'OUT' ? 'bg-white shadow-sm text-red-600' : 'text-slate-400 hover:text-slate-600'}`}>Saída (OUT)</button>
+                          <button onClick={() => handleTypeChange('IN')} className={`px-6 py-2.5 rounded-lg text-sm font-black uppercase tracking-wider transition-all ${checklistData.type === 'IN' ? 'bg-white shadow-sm text-orange-600' : 'text-slate-400 hover:text-slate-600'}`}>Entrada (IN)</button>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Data</p>
+                          <input type="date" className="border-none bg-slate-50 rounded-lg px-3 py-2 text-sm font-bold mt-1" value={checklistData.date} onChange={(e) => handleInOutChange('date', e.target.value)}/>
+                        </div>
+                      </div>
+
+                      {/* Informações Básicas */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                        <div>
+                          <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Origem / Destino</label>
+                          <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl relative">
+                            <input 
+                              list="locations-list"
+                              type="text" 
+                              placeholder="De..." 
+                              className="w-full bg-transparent border-none text-sm font-semibold focus:ring-0 p-0" 
+                              value={checklistData.from} 
+                              onChange={(e) => handleInOutChange('from', e.target.value)} 
+                            />
+                            <ArrowRight size={16} className="text-slate-400 shrink-0" />
+                            <input 
+                              list="locations-list"
+                              type="text" 
+                              placeholder="Para..." 
+                              className="w-full bg-transparent border-none text-sm font-semibold focus:ring-0 p-0" 
+                              value={checklistData.to} 
+                              onChange={(e) => handleInOutChange('to', e.target.value)} 
+                            />
+                            
+                            <datalist id="locations-list">
+                              {uniqueLocations.filter(loc => loc !== 'Todas').map((loc, idx) => (
+                                <option key={idx} value={loc} />
+                              ))}
+                            </datalist>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Finalidade</label>
+                          <select className="w-full bg-slate-50 border-none rounded-xl p-3 text-sm font-semibold focus:ring-2 focus:ring-red-500" value={checklistData.objective} onChange={(e) => handleInOutChange('objective', e.target.value)}>
+                            <option>Serviços de calibração</option>
+                            <option>Calibração do padrão</option>
+                            <option>Manutenção</option>
+                            <option>Outros</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Seleção de Múltiplos Equipamentos */}
+                      <div className="mb-8 bg-red-50 p-6 rounded-2xl border border-red-100">
+                        <label className="block text-xs font-black text-red-800 uppercase tracking-widest mb-3">Vincular Equipamentos do Inventário</label>
+                        
+                        <div className="relative mb-3">
+                          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-red-400" size={18} />
+                          <input 
+                            type="text" 
+                            placeholder="Pesquisar equipamento (Ex: AF 0285, Caliper...)" 
+                            className="w-full pl-12 pr-4 py-3 bg-white border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-red-500 shadow-sm"
+                            value={equipmentSearchTerm}
+                            onChange={(e) => setEquipmentSearchTerm(e.target.value)}
+                          />
+                        </div>
+
+                        <select 
+                          className="w-full bg-white border-none rounded-xl p-4 text-sm font-bold shadow-sm focus:ring-2 focus:ring-red-500 mb-4"
+                          onChange={handleAddEquipment}
+                          value=""
+                        >
+                          <option value="" disabled>-- Selecione um equipamento para adicionar --</option>
+                          {availableEquipmentsForChecklist.map(item => {
+                            const equipName = item["equipment_2"] || item["equipment"];
+                            const af = item["af"] || item["número af"] || item["af dimensional"];
+                            const code = item["ods code"] || item["af dimensional"] || "S/ CODIGO";
+                            return (
+                              <option key={item.id} value={item.id}>
+                                {code} {af && af !== code ? `(${af})` : ''} - {equipName}
+                              </option>
+                            );
+                          })}
+                        </select>
+
+                        {checklistData.selectedEquipments.length > 0 && (
+                          <div className="space-y-3 mt-4">
+                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Equipamentos no Relatório ({checklistData.selectedEquipments.length}):</p>
+                            {checklistData.selectedEquipments.map((eq, index) => {
+                              const equipName = eq["equipment_2"] || eq["equipment"];
+                              const af = eq["af"] || eq["número af"] || eq["af dimensional"];
+                              const code = eq["ods code"] || eq["af dimensional"] || "S/ CODIGO";
+                              
+                              return (
+                                <div key={eq.id} className="flex flex-col md:flex-row justify-between gap-4 text-sm bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                                  <div className="flex-1">
+                                    <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-50">
+                                      <span className="font-bold text-slate-800">
+                                        <span className="bg-slate-800 text-white px-2 py-0.5 rounded text-[10px] mr-2">{index + 1}</span>
+                                        {code} {af && af !== code ? `(${af})` : ''} - {equipName}
+                                      </span>
+                                      <button onClick={() => handleRemoveEquipment(eq.id)} className="text-orange-500 hover:text-orange-700 hover:bg-orange-50 p-1.5 rounded-lg transition-colors">
+                                        <Trash2 size={16} />
+                                      </button>
+                                    </div>
+                                    <div className="flex flex-col md:flex-row gap-4 mt-2">
+                                      <div className="flex-1">
+                                        <span className="text-slate-400 font-bold block text-[10px] uppercase">Acessórios Esperados:</span>
+                                        <span className="font-semibold text-slate-700 text-xs">{getExpectedAccessories(equipName)}</span>
+                                      </div>
+                                      <div className="flex-1">
+                                        <span className="text-slate-400 font-bold block text-[10px] uppercase">Local Atual:</span>
+                                        <span className="font-semibold text-slate-700 text-xs">{eq["equipment location"]}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Condições do Equipamento */}
+                      <div className="mb-8">
+                        <h3 className="text-lg font-black text-slate-800 mb-4 border-b border-slate-100 pb-2">Verificação de Condições (Aplica-se a todos)</h3>
+                        <div className="space-y-4">
+                          <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-50 p-4 rounded-xl">
+                            <div className="mb-2 md:mb-0"><p className="font-bold text-sm">Identificação e Integridade</p><p className="text-xs text-slate-500">Sem danos aparentes aos equipamentos e caixas.</p></div>
+                            <div className="flex gap-2">
+                              <button onClick={() => handleInOutChange('integrity', 'OK')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.integrity === 'OK' ? 'bg-orange-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>OK</button>
+                              <button onClick={() => handleInOutChange('integrity', 'NOT OK')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.integrity === 'NOT OK' ? 'bg-red-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>NOT OK</button>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-50 p-4 rounded-xl">
+                            <div className="mb-2 md:mb-0"><p className="font-bold text-sm">Acessórios</p><p className="text-xs text-slate-500">Todos os acessórios previstos estão presentes, sem danos.</p></div>
+                            <div className="flex gap-2">
+                              <button onClick={() => handleInOutChange('accessories', 'OK')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.accessories === 'OK' ? 'bg-orange-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>OK</button>
+                              <button onClick={() => handleInOutChange('accessories', 'NOT OK')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.accessories === 'NOT OK' ? 'bg-red-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>NOT OK</button>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-50 p-4 rounded-xl">
+                            <div className="mb-2 md:mb-0"><p className="font-bold text-sm">Operação do Equipamento</p><p className="text-xs text-slate-500">Equipamentos ligam e funcionam adequadamente.</p></div>
+                            <div className="flex gap-2">
+                              <button onClick={() => handleInOutChange('operation', 'OK')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.operation === 'OK' ? 'bg-orange-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>OK</button>
+                              <button onClick={() => handleInOutChange('operation', 'NOT OK')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.operation === 'NOT OK' ? 'bg-red-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>NOT OK</button>
                             </div>
                           </div>
                         </div>
-                      )
-                    })}
+                      </div>
+
+                      {checklistData.selectedEquipments.length > 0 && (isDryBlock || isBarometer || isCaliper) && (
+                        <div className="mb-8 bg-orange-50 p-6 rounded-2xl border border-orange-100">
+                          <h3 className="text-sm font-black text-orange-800 uppercase tracking-widest mb-4">Verificação Específica Necessária</h3>
+                          
+                          {isDryBlock && (
+                            <div className="space-y-4 mb-6 pb-6 border-b border-orange-200 last:border-0 last:pb-0 last:mb-0">
+                              <p className="text-sm font-bold text-slate-800">Forno Bloco Seco (Dry Block Thermal Bath)</p>
+                              <div className="flex flex-wrap gap-2">
+                                {['Working', 'Not Working', '0°C', '50°C'].map(status => (
+                                  <button key={status} onClick={() => handleInOutChange('dryBlockStatus', status)} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all border ${checklistData.dryBlockStatus === status ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-slate-600 border-slate-200'}`}>{status}</button>
+                                ))}
+                              </div>
+                              <input type="text" placeholder="Valor lido no display..." className="w-full bg-white border border-slate-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-orange-500" value={checklistData.dryBlockValue} onChange={(e) => handleInOutChange('dryBlockValue', e.target.value)} />
+                            </div>
+                          )}
+
+                          {isBarometer && (
+                            <div className="space-y-4 mb-6 pb-6 border-b border-orange-200 last:border-0 last:pb-0 last:mb-0">
+                              <p className="text-sm font-bold text-slate-800">Barômetro (Barometer)</p>
+                              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">1: A diferença de valores atmosféricos não deve exceder 0,1 kPa</p>
+                              <div className="grid grid-cols-2 gap-4">
+                                <input type="text" placeholder="Barometer AF" className="bg-white border border-slate-200 rounded-lg p-3 text-sm" value={checklistData.barometerAf} onChange={(e) => handleInOutChange('barometerAf', e.target.value)} />
+                                <input type="text" placeholder="Atmospheric Value" className="bg-white border border-slate-200 rounded-lg p-3 text-sm" value={checklistData.barometerAtm} onChange={(e) => handleInOutChange('barometerAtm', e.target.value)} />
+                              </div>
+                            </div>
+                          )}
+
+                          {isCaliper && (
+                            <div className="space-y-4 mb-6 pb-6 border-b border-orange-200 last:border-0 last:pb-0 last:mb-0">
+                              <p className="text-sm font-bold text-slate-800">Paquímetro (Caliper)</p>
+                              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">2: A diferença do Bloco Padrão e o Valor Lido não deve exceder 0,03 mm</p>
+                              <div className="grid grid-cols-3 gap-4">
+                                <input type="text" placeholder="Caliper AF" className="bg-white border border-slate-200 rounded-lg p-3 text-sm" value={checklistData.caliperAf} onChange={(e) => handleInOutChange('caliperAf', e.target.value)} />
+                                <input type="text" placeholder="Standard block (mm)" className="bg-white border border-slate-200 rounded-lg p-3 text-sm" value={checklistData.caliperBlock} onChange={(e) => handleInOutChange('caliperBlock', e.target.value)} />
+                                <input type="text" placeholder="Value (mm)" className="bg-white border border-slate-200 rounded-lg p-3 text-sm" value={checklistData.caliperValue} onChange={(e) => handleInOutChange('caliperValue', e.target.value)} />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="mb-8">
+                        <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Comentários (Non-conforming work)</label>
+                        <textarea className="w-full bg-slate-50 border-none rounded-xl p-4 text-sm font-medium focus:ring-2 focus:ring-red-500 h-24 resize-none" placeholder="Detalhes caso algum equipamento esteja NOT OK..." value={checklistData.comments} onChange={(e) => handleInOutChange('comments', e.target.value)}></textarea>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                        <div>
+                          <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Verificado por</label>
+                          <input type="text" className="w-full bg-slate-50 border-none rounded-xl p-3 text-sm font-semibold focus:ring-2 focus:ring-red-500" value={checklistData.verifier} onChange={(e) => handleInOutChange('verifier', e.target.value)} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Aprovado por</label>
+                          <input type="text" className="w-full bg-slate-50 border-none rounded-xl p-3 text-sm font-semibold focus:ring-2 focus:ring-red-500" value={checklistData.approver} onChange={(e) => handleInOutChange('approver', e.target.value)} />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col md:flex-row gap-4 mt-8 pt-6 border-t border-slate-100">
+                        <button 
+                          onClick={() => {
+                            setReportMode(true);
+                            setTimeout(() => printReport(), 800);
+                          }}
+                          disabled={checklistData.selectedEquipments.length === 0 || isSaving}
+                          className="flex-1 bg-slate-100 text-slate-700 py-4 rounded-2xl font-black tracking-wide hover:bg-slate-200 transition-colors disabled:opacity-50"
+                        >
+                          Gerar Relatório sem Guardar
+                        </button>
+                        <button 
+                          onClick={handleSaveAndGenerate}
+                          disabled={checklistData.selectedEquipments.length === 0 || isSaving}
+                          className="flex-[2] bg-red-600 text-white py-4 rounded-2xl font-black tracking-wide hover:bg-red-700 transition-colors disabled:opacity-50 flex justify-center items-center gap-3 shadow-lg shadow-red-500/30"
+                        >
+                          {isSaving ? (
+                            <><RefreshCw size={20} className="animate-spin" /> A guardar dados na nuvem...</>
+                          ) : (
+                            <><CloudUpload size={20} /> Guardar no Sheets e Gerar Relatório</>
+                          )}
+                        </button>
+                      </div>
+
+                    </div>
                   </div>
                 )}
-              </div>
 
-              {/* Condições do Equipamento */}
-              <div className="mb-8">
-                <h3 className="text-lg font-black text-slate-800 mb-4 border-b border-slate-100 pb-2">Verificação de Condições (Aplica-se a todos)</h3>
-                <div className="space-y-4">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-50 p-4 rounded-xl">
-                    <div className="mb-2 md:mb-0"><p className="font-bold text-sm">Identificação e Integridade</p><p className="text-xs text-slate-500">Sem danos aparentes aos equipamentos e caixas.</p></div>
-                    <div className="flex gap-2">
-                      <button onClick={() => handleInOutChange('integrity', 'OK')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.integrity === 'OK' ? 'bg-orange-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>OK</button>
-                      <button onClick={() => handleInOutChange('integrity', 'NOT OK')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.integrity === 'NOT OK' ? 'bg-red-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>NOT OK</button>
+                {/* --- IMPRESSÃO RELATÓRIO IN/OUT --- */}
+                {reportMode && activeTab === 'checklist' && (
+                  <div className="max-w-4xl mx-auto bg-white rounded-none md:rounded-[2rem] shadow-none md:shadow-xl border-0 md:border border-slate-200 p-8 md:p-12 print:p-0 print:shadow-none print:border-0 print:max-w-none print-area">
+                    
+                    <div className="flex justify-between items-center mb-8 pb-8 border-b border-dashed border-slate-200 print:hidden">
+                      <button onClick={() => setReportMode(false)} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 font-bold transition-colors">
+                        <ArrowLeft size={20} /> Voltar ao Formulário
+                      </button>
+                      <button onClick={printReport} className="flex items-center gap-2 bg-red-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-red-700 transition-colors">
+                        <Printer size={20} /> Imprimir / PDF
+                      </button>
                     </div>
-                  </div>
 
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-50 p-4 rounded-xl">
-                    <div className="mb-2 md:mb-0"><p className="font-bold text-sm">Acessórios</p><p className="text-xs text-slate-500">Todos os acessórios previstos estão presentes, sem danos.</p></div>
-                    <div className="flex gap-2">
-                      <button onClick={() => handleInOutChange('accessories', 'OK')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.accessories === 'OK' ? 'bg-orange-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>OK</button>
-                      <button onClick={() => handleInOutChange('accessories', 'NOT OK')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.accessories === 'NOT OK' ? 'bg-red-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>NOT OK</button>
+                    <div className="text-center mb-10">
+                      <img 
+                        src="dog%20ods.png" 
+                        alt="ODS Metering Systems Logo" 
+                        className="h-16 w-auto mx-auto mb-4 print:h-12" 
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                      <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tight">Formulário de {checklistData.type === 'IN' ? 'Entrada' : 'Saída'}</h1>
+                      <p className="text-slate-500 font-bold tracking-widest uppercase mt-2">Equipment {checklistData.type}</p>
                     </div>
-                  </div>
 
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-50 p-4 rounded-xl">
-                    <div className="mb-2 md:mb-0"><p className="font-bold text-sm">Operação do Equipamento</p><p className="text-xs text-slate-500">Equipamentos ligam e funcionam adequadamente.</p></div>
-                    <div className="flex gap-2">
-                      <button onClick={() => handleInOutChange('operation', 'OK')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.operation === 'OK' ? 'bg-orange-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>OK</button>
-                      <button onClick={() => handleInOutChange('operation', 'NOT OK')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.operation === 'NOT OK' ? 'bg-red-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>NOT OK</button>
+                    <table className="w-full mb-8 border-collapse border border-slate-800 text-sm">
+                      <tbody>
+                        <tr>
+                          <td className="border border-slate-800 p-3 font-bold bg-slate-100 w-1/4">Data (Date):</td>
+                          <td className="border border-slate-800 p-3 w-1/4">{checklistData.date}</td>
+                          <td className="border border-slate-800 p-3 font-bold bg-slate-100 w-1/4">Finalidade (Objective):</td>
+                          <td className="border border-slate-800 p-3 w-1/4">{checklistData.objective}</td>
+                        </tr>
+                        <tr>
+                          <td className="border border-slate-800 p-3 font-bold bg-slate-100">De (From):</td>
+                          <td className="border border-slate-800 p-3">{checklistData.from}</td>
+                          <td className="border border-slate-800 p-3 font-bold bg-slate-100">Para (To):</td>
+                          <td className="border border-slate-800 p-3">{checklistData.to}</td>
+                        </tr>
+                        <tr>
+                          <td className="border border-slate-800 p-3 font-bold bg-slate-100 align-top">Equipamentos:</td>
+                          <td className="border border-slate-800 p-3" colSpan="3">
+                            <ul className="list-decimal pl-5 space-y-1.5">
+                              {checklistData.selectedEquipments.map(eq => {
+                                const equipName = eq["equipment_2"] || eq["equipment"];
+                                const af = eq["af"] || eq["número af"] || eq["af dimensional"];
+                                const code = eq["ods code"] || eq["af dimensional"] || "S/ CODIGO";
+                                
+                                return (
+                                  <li key={eq.id}>
+                                    <span className="font-semibold">{equipName}</span>
+                                    <span className="font-mono text-xs ml-2 bg-slate-200 px-2 py-0.5 rounded">
+                                      ODS: {code} {af && af !== code ? `| AF: ${af}` : ''}
+                                    </span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    <div className="mb-8">
+                      <h3 className="font-bold text-lg bg-slate-800 text-white p-2 mb-4 uppercase text-center text-sm tracking-widest">Equipment Condition Verification</h3>
+                      <table className="w-full border-collapse border border-slate-800 text-sm">
+                        <tbody>
+                          <tr>
+                            <td className="border border-slate-800 p-3 w-3/4"><strong>Identification and integrity:</strong> check that there is no apparent damage to the equipment and its box.</td>
+                            <td className={`border border-slate-800 p-3 text-center font-bold align-middle ${checklistData.integrity === 'NOT OK' ? 'text-red-600 bg-red-50' : 'text-slate-800'}`}>{checklistData.integrity || 'N/A'}</td>
+                          </tr>
+                          <tr>
+                            <td className="border border-slate-800 p-3 w-3/4">
+                              <strong>Accessories:</strong> check that all accessories are present, without apparent damage.<br/>
+                              <div className="text-xs text-slate-500 font-normal italic mt-2">
+                                Expected Accessories:
+                                <ul className="list-disc pl-4 mt-1">
+                                  {checklistData.selectedEquipments.map(eq => {
+                                    const equipName = eq["equipment_2"] || eq["equipment"];
+                                    const code = eq["ods code"] || eq["af dimensional"] || "S/ CODIGO";
+                                    return (
+                                      <li key={eq.id}><strong>{code}</strong>: {getExpectedAccessories(equipName)}</li>
+                                    )
+                                  })}
+                                </ul>
+                              </div>
+                            </td>
+                            <td className={`border border-slate-800 p-3 text-center font-bold align-middle ${checklistData.accessories === 'NOT OK' ? 'text-red-600 bg-red-50' : 'text-slate-800'}`}>{checklistData.accessories || 'N/A'}</td>
+                          </tr>
+                          <tr>
+                            <td className="border border-slate-800 p-3 w-3/4"><strong>Equipment operation:</strong> check if the equipment is switching on and working properly.</td>
+                            <td className={`border border-slate-800 p-3 text-center font-bold align-middle ${checklistData.operation === 'NOT OK' ? 'text-red-600 bg-red-50' : 'text-slate-800'}`}>{checklistData.operation || 'N/A'}</td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
-                  </div>
-                </div>
-              </div>
 
-              {checklistData.selectedEquipments.length > 0 && (isDryBlock || isBarometer || isCaliper) && (
-                <div className="mb-8 bg-orange-50 p-6 rounded-2xl border border-orange-100">
-                  <h3 className="text-sm font-black text-orange-800 uppercase tracking-widest mb-4">Verificação Específica Necessária</h3>
-                  
-                  {isDryBlock && (
-                    <div className="space-y-4 mb-6 pb-6 border-b border-orange-200 last:border-0 last:pb-0 last:mb-0">
-                      <p className="text-sm font-bold text-slate-800">Forno Bloco Seco (Dry Block Thermal Bath)</p>
-                      <div className="flex flex-wrap gap-2">
-                        {['Working', 'Not Working', '0°C', '50°C'].map(status => (
-                          <button key={status} onClick={() => handleInOutChange('dryBlockStatus', status)} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all border ${checklistData.dryBlockStatus === status ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-slate-600 border-slate-200'}`}>{status}</button>
-                        ))}
-                      </div>
-                      <input type="text" placeholder="Valor lido no display..." className="w-full bg-white border border-slate-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-orange-500" value={checklistData.dryBlockValue} onChange={(e) => handleInOutChange('dryBlockValue', e.target.value)} />
-                    </div>
-                  )}
-
-                  {isBarometer && (
-                    <div className="space-y-4 mb-6 pb-6 border-b border-orange-200 last:border-0 last:pb-0 last:mb-0">
-                      <p className="text-sm font-bold text-slate-800">Barômetro (Barometer)</p>
-                      <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">1: A diferença de valores atmosféricos não deve exceder 0,1 kPa</p>
-                      <div className="grid grid-cols-2 gap-4">
-                        <input type="text" placeholder="Barometer AF" className="bg-white border border-slate-200 rounded-lg p-3 text-sm" value={checklistData.barometerAf} onChange={(e) => handleInOutChange('barometerAf', e.target.value)} />
-                        <input type="text" placeholder="Atmospheric Value" className="bg-white border border-slate-200 rounded-lg p-3 text-sm" value={checklistData.barometerAtm} onChange={(e) => handleInOutChange('barometerAtm', e.target.value)} />
-                      </div>
-                    </div>
-                  )}
-
-                  {isCaliper && (
-                    <div className="space-y-4 mb-6 pb-6 border-b border-orange-200 last:border-0 last:pb-0 last:mb-0">
-                      <p className="text-sm font-bold text-slate-800">Paquímetro (Caliper)</p>
-                      <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">2: A diferença do Bloco Padrão e o Valor Lido não deve exceder 0,03 mm</p>
-                      <div className="grid grid-cols-3 gap-4">
-                        <input type="text" placeholder="Caliper AF" className="bg-white border border-slate-200 rounded-lg p-3 text-sm" value={checklistData.caliperAf} onChange={(e) => handleInOutChange('caliperAf', e.target.value)} />
-                        <input type="text" placeholder="Standard block (mm)" className="bg-white border border-slate-200 rounded-lg p-3 text-sm" value={checklistData.caliperBlock} onChange={(e) => handleInOutChange('caliperBlock', e.target.value)} />
-                        <input type="text" placeholder="Value (mm)" className="bg-white border border-slate-200 rounded-lg p-3 text-sm" value={checklistData.caliperValue} onChange={(e) => handleInOutChange('caliperValue', e.target.value)} />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="mb-8">
-                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Comentários (Non-conforming work)</label>
-                <textarea className="w-full bg-slate-50 border-none rounded-xl p-4 text-sm font-medium focus:ring-2 focus:ring-red-500 h-24 resize-none" placeholder="Detalhes caso algum equipamento esteja NOT OK..." value={checklistData.comments} onChange={(e) => handleInOutChange('comments', e.target.value)}></textarea>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Verificado por</label>
-                  <input type="text" className="w-full bg-slate-50 border-none rounded-xl p-3 text-sm font-semibold focus:ring-2 focus:ring-red-500" value={checklistData.verifier} onChange={(e) => handleInOutChange('verifier', e.target.value)} />
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Aprovado por</label>
-                  <input type="text" className="w-full bg-slate-50 border-none rounded-xl p-3 text-sm font-semibold focus:ring-2 focus:ring-red-500" value={checklistData.approver} onChange={(e) => handleInOutChange('approver', e.target.value)} />
-                </div>
-              </div>
-
-              <div className="flex flex-col md:flex-row gap-4 mt-8 pt-6 border-t border-slate-100">
-                <button 
-                  onClick={() => {
-                    setReportMode(true);
-                    setTimeout(() => printReport(), 800);
-                  }}
-                  disabled={checklistData.selectedEquipments.length === 0 || isSaving}
-                  className="flex-1 bg-slate-100 text-slate-700 py-4 rounded-2xl font-black tracking-wide hover:bg-slate-200 transition-colors disabled:opacity-50"
-                >
-                  Gerar Relatório sem Guardar
-                </button>
-                <button 
-                  onClick={handleSaveAndGenerate}
-                  disabled={checklistData.selectedEquipments.length === 0 || isSaving}
-                  className="flex-[2] bg-red-600 text-white py-4 rounded-2xl font-black tracking-wide hover:bg-red-700 transition-colors disabled:opacity-50 flex justify-center items-center gap-3 shadow-lg shadow-red-500/30"
-                >
-                  {isSaving ? (
-                    <><RefreshCw size={20} className="animate-spin" /> A guardar dados na nuvem...</>
-                  ) : (
-                    <><CloudUpload size={20} /> Guardar no Sheets e Gerar Relatório</>
-                  )}
-                </button>
-              </div>
-
-            </div>
-          </div>
-        )}
-
-        {/* --- IMPRESSÃO RELATÓRIO IN/OUT --- */}
-        {reportMode && activeTab === 'checklist' && (
-          <div className="max-w-4xl mx-auto bg-white rounded-none md:rounded-[2rem] shadow-none md:shadow-xl border-0 md:border border-slate-200 p-8 md:p-12 print:p-0 print:shadow-none print:border-0 print:max-w-none">
-            
-            <div className="flex justify-between items-center mb-8 pb-8 border-b border-dashed border-slate-200 print:hidden">
-              <button onClick={() => setReportMode(false)} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 font-bold transition-colors">
-                <ArrowLeft size={20} /> Voltar ao Formulário
-              </button>
-              <button onClick={printReport} className="flex items-center gap-2 bg-red-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-red-700 transition-colors">
-                <Printer size={20} /> Imprimir / PDF
-              </button>
-            </div>
-
-            <div className="text-center mb-10">
-              <img 
-                src="/dog%20ods.png" 
-                alt="ODS Metering Systems Logo" 
-                className="h-16 w-auto mx-auto mb-4 print:h-12" 
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
-              <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tight">Formulário de {checklistData.type === 'IN' ? 'Entrada' : 'Saída'}</h1>
-              <p className="text-slate-500 font-bold tracking-widest uppercase mt-2">Equipment {checklistData.type}</p>
-            </div>
-
-            <table className="w-full mb-8 border-collapse border border-slate-800 text-sm">
-              <tbody>
-                <tr>
-                  <td className="border border-slate-800 p-3 font-bold bg-slate-100 w-1/4">Data (Date):</td>
-                  <td className="border border-slate-800 p-3 w-1/4">{checklistData.date}</td>
-                  <td className="border border-slate-800 p-3 font-bold bg-slate-100 w-1/4">Finalidade (Objective):</td>
-                  <td className="border border-slate-800 p-3 w-1/4">{checklistData.objective}</td>
-                </tr>
-                <tr>
-                  <td className="border border-slate-800 p-3 font-bold bg-slate-100">De (From):</td>
-                  <td className="border border-slate-800 p-3">{checklistData.from}</td>
-                  <td className="border border-slate-800 p-3 font-bold bg-slate-100">Para (To):</td>
-                  <td className="border border-slate-800 p-3">{checklistData.to}</td>
-                </tr>
-                <tr>
-                  <td className="border border-slate-800 p-3 font-bold bg-slate-100 align-top">Equipamentos:</td>
-                  <td className="border border-slate-800 p-3" colSpan="3">
-                    <ul className="list-decimal pl-5 space-y-1.5">
-                      {checklistData.selectedEquipments.map(eq => {
-                        const equipName = eq["equipment_2"] || eq["equipment"];
-                        const af = eq["af"] || eq["número af"] || eq["af dimensional"];
-                        const code = eq["ods code"] || eq["af dimensional"] || "S/ CODIGO";
+                    {(isDryBlock || isBarometer || isCaliper) && (
+                      <div className="mb-8 border-2 border-slate-800 p-4 relative">
+                        <span className="absolute -top-3 left-4 bg-white px-2 font-bold text-xs">SPECIFIC VERIFICATION</span>
                         
-                        return (
-                          <li key={eq.id}>
-                            <span className="font-semibold">{equipName}</span>
-                            <span className="font-mono text-xs ml-2 bg-slate-200 px-2 py-0.5 rounded">
-                              ODS: {code} {af && af !== code ? `| AF: ${af}` : ''}
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                        {isDryBlock && (
+                          <div className="mb-4">
+                            <p className="font-bold mb-2">Dry Block Thermal Bath</p>
+                            <p className="text-sm mb-1">Status: <span className="font-bold">{checklistData.dryBlockStatus || 'N/A'}</span></p>
+                            <p className="text-sm">Value verified: <span className="font-bold">{checklistData.dryBlockValue || 'N/A'}</span></p>
+                          </div>
+                        )}
 
-            <div className="mb-8">
-              <h3 className="font-bold text-lg bg-slate-800 text-white p-2 mb-4 uppercase text-center text-sm tracking-widest">Equipment Condition Verification</h3>
-              <table className="w-full border-collapse border border-slate-800 text-sm">
-                <tbody>
-                  <tr>
-                    <td className="border border-slate-800 p-3 w-3/4"><strong>Identification and integrity:</strong> check that there is no apparent damage to the equipment and its box.</td>
-                    <td className={`border border-slate-800 p-3 text-center font-bold align-middle ${checklistData.integrity === 'NOT OK' ? 'text-red-600 bg-red-50' : 'text-slate-800'}`}>{checklistData.integrity || 'N/A'}</td>
-                  </tr>
-                  <tr>
-                    <td className="border border-slate-800 p-3 w-3/4">
-                      <strong>Accessories:</strong> check that all accessories are present, without apparent damage.<br/>
-                      <div className="text-xs text-slate-500 font-normal italic mt-2">
-                        Expected Accessories:
-                        <ul className="list-disc pl-4 mt-1">
-                          {checklistData.selectedEquipments.map(eq => {
-                            const equipName = eq["equipment_2"] || eq["equipment"];
-                            const code = eq["ods code"] || eq["af dimensional"] || "S/ CODIGO";
-                            return (
-                              <li key={eq.id}><strong>{code}</strong>: {getExpectedAccessories(equipName)}</li>
-                            )
-                          })}
-                        </ul>
+                        {isBarometer && (
+                          <div className="mb-4">
+                            <p className="font-bold mb-2">Barometer</p>
+                            <p className="text-sm mb-1">Barometer AF: <span className="font-bold">{checklistData.barometerAf || 'N/A'}</span></p>
+                            <p className="text-sm mb-2">Atmospheric value: <span className="font-bold">{checklistData.barometerAtm || 'N/A'}</span></p>
+                            <p className="text-xs italic text-slate-500">1: The difference of atmospheric values shall not exceed 0,1 kPa</p>
+                          </div>
+                        )}
+
+                        {isCaliper && (
+                          <div>
+                            <p className="font-bold mb-2">Caliper</p>
+                            <p className="text-sm mb-1">Caliper AF: <span className="font-bold">{checklistData.caliperAf || 'N/A'}</span></p>
+                            <p className="text-sm mb-1">Standard block (mm): <span className="font-bold">{checklistData.caliperBlock || 'N/A'}</span></p>
+                            <p className="text-sm mb-2">Value (mm): <span className="font-bold">{checklistData.caliperValue || 'N/A'}</span></p>
+                            <p className="text-xs italic text-slate-500">2: The difference from Standard Block and Value (read on caliper) shall not exceed 0,03 mm</p>
+                          </div>
+                        )}
                       </div>
-                    </td>
-                    <td className={`border border-slate-800 p-3 text-center font-bold align-middle ${checklistData.accessories === 'NOT OK' ? 'text-red-600 bg-red-50' : 'text-slate-800'}`}>{checklistData.accessories || 'N/A'}</td>
-                  </tr>
-                  <tr>
-                    <td className="border border-slate-800 p-3 w-3/4"><strong>Equipment operation:</strong> check if the equipment is switching on and working properly.</td>
-                    <td className={`border border-slate-800 p-3 text-center font-bold align-middle ${checklistData.operation === 'NOT OK' ? 'text-red-600 bg-red-50' : 'text-slate-800'}`}>{checklistData.operation || 'N/A'}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+                    )}
 
-            {(isDryBlock || isBarometer || isCaliper) && (
-              <div className="mb-8 border-2 border-slate-800 p-4 relative">
-                <span className="absolute -top-3 left-4 bg-white px-2 font-bold text-xs">SPECIFIC VERIFICATION</span>
-                
-                {isDryBlock && (
-                  <div className="mb-4">
-                    <p className="font-bold mb-2">Dry Block Thermal Bath</p>
-                    <p className="text-sm mb-1">Status: <span className="font-bold">{checklistData.dryBlockStatus || 'N/A'}</span></p>
-                    <p className="text-sm">Value verified: <span className="font-bold">{checklistData.dryBlockValue || 'N/A'}</span></p>
+                    <div className="mb-12">
+                      <p className="font-bold text-sm mb-2">Comments (Non-conforming work):</p>
+                      <div className="border border-slate-400 min-h-[80px] p-3 text-sm rounded">
+                        {checklistData.comments || <span className="text-slate-300 italic">No comments...</span>}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-12 mt-16 text-sm">
+                      <div className="text-center">
+                        <div className="border-b border-slate-800 pb-1 mb-2 min-h-[30px] font-bold text-lg font-signature">
+                          {checklistData.verifier}
+                        </div>
+                        <p className="font-bold">Verificado por (Verified by)</p>
+                      </div>
+                      <div className="text-center">
+                        <div className="border-b border-slate-800 pb-1 mb-2 min-h-[30px] font-bold text-lg font-signature">
+                          {checklistData.approver}
+                        </div>
+                        <p className="font-bold">Aprovado por (Approved by)</p>
+                      </div>
+                    </div>
+
                   </div>
                 )}
-
-                {isBarometer && (
-                  <div className="mb-4">
-                    <p className="font-bold mb-2">Barometer</p>
-                    <p className="text-sm mb-1">Barometer AF: <span className="font-bold">{checklistData.barometerAf || 'N/A'}</span></p>
-                    <p className="text-sm mb-2">Atmospheric value: <span className="font-bold">{checklistData.barometerAtm || 'N/A'}</span></p>
-                    <p className="text-xs italic text-slate-500">1: The difference of atmospheric values shall not exceed 0,1 kPa</p>
-                  </div>
-                )}
-
-                {isCaliper && (
-                  <div>
-                    <p className="font-bold mb-2">Caliper</p>
-                    <p className="text-sm mb-1">Caliper AF: <span className="font-bold">{checklistData.caliperAf || 'N/A'}</span></p>
-                    <p className="text-sm mb-1">Standard block (mm): <span className="font-bold">{checklistData.caliperBlock || 'N/A'}</span></p>
-                    <p className="text-sm mb-2">Value (mm): <span className="font-bold">{checklistData.caliperValue || 'N/A'}</span></p>
-                    <p className="text-xs italic text-slate-500">2: The difference from Standard Block and Value (read on caliper) shall not exceed 0,03 mm</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="mb-12">
-              <p className="font-bold text-sm mb-2">Comments (Non-conforming work):</p>
-              <div className="border border-slate-400 min-h-[80px] p-3 text-sm rounded">
-                {checklistData.comments || <span className="text-slate-300 italic">No comments...</span>}
-              </div>
+              </main>
             </div>
+          );
+        };
 
-            <div className="grid grid-cols-2 gap-12 mt-16 text-sm">
-              <div className="text-center">
-                <div className="border-b border-slate-800 pb-1 mb-2 min-h-[30px] font-bold text-lg font-signature">
-                  {checklistData.verifier}
-                </div>
-                <p className="font-bold">Verificado por (Verified by)</p>
-              </div>
-              <div className="text-center">
-                <div className="border-b border-slate-800 pb-1 mb-2 min-h-[30px] font-bold text-lg font-signature">
-                  {checklistData.approver}
-                </div>
-                <p className="font-bold">Aprovado por (Approved by)</p>
-              </div>
-            </div>
-
-          </div>
-        )}
-
-      </main>
-    </div>
-  );
-};
-
-export default App;
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
