@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-PT">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ODS Metering Systems</title>
+    <title>ODS Metering Systems - Sistema Integrado</title>
     
     <!-- Meta Tags para PWA (Mobile App) -->
     <meta name="theme-color" content="#dc2626" />
@@ -23,6 +23,10 @@
     <!-- Babel for JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+    <!-- Bibliotecas QR Code -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+
     <style>
         body { background-color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         
@@ -37,6 +41,25 @@
             .print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 0; margin: 0; }
             .no-print { display: none !important; }
             @page { margin: 1cm; }
+        }
+
+        /* Ajustes específicos para a biblioteca do Scanner QR dentro do Tailwind */
+        #reader { border: none !important; }
+        #reader__dashboard_section_csr span { color: #334155; font-family: inherit; }
+        #reader button { 
+            background-color: #dc2626 !important; 
+            color: white !important; 
+            border-radius: 0.5rem !important; 
+            padding: 0.5rem 1rem !important;
+            border: none !important;
+            font-weight: 600 !important;
+            margin: 5px !important;
+        }
+        #reader select {
+            padding: 0.5rem !important;
+            border-radius: 0.5rem !important;
+            border: 1px solid #cbd5e1 !important;
+            margin-bottom: 10px !important;
         }
     </style>
 
@@ -69,7 +92,6 @@
         // ÍCONES
         // ==========================================
         const LayoutDashboard = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>;
-        const Package = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>;
         const Search = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>;
         const RefreshCw = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>;
         const MapPin = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>;
@@ -89,12 +111,17 @@
         const Menu = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>;
         const ArrowDown = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>;
         const Camera = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>;
+        const QrCodeIcon = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></svg>;
+        const ScanIcon = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>;
+
 
         // ==========================================
         // DADOS E CONFIGURAÇÕES
         // ==========================================
         const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTwpuFDiuBcbqZdPenl3bkfJAcdufNq3ZPDWqSoFF_kWho86G-jyUd_2x5NeRDT2UnD400bbqOjcavw/pub?gid=1535212226&single=true&output=csv"; 
         const GAS_URL = "https://script.google.com/macros/s/AKfycbxBjqHkKUj9NN99LCYOOHh4Xwg_IMJmaNKmZV3iCgYbdWT0UK2drKEABzpzOAXWlj_2/exec"; 
+        const QR_GAS_URL = "https://script.google.com/macros/s/AKfycbxDicMNmZBbCkqdmPx4WjfM0WngMxGhhfAkaqRkQhj7rWbyn05LZwuUkvgASu74AXA/exec";
+        const PADRAO_QR = /^AF\d{4}$/i;
         const INITIAL_DATA = [];
 
         const KITS_FPSO = {
@@ -177,6 +204,303 @@
         };
 
         // ==========================================
+        // COMPONENTES: GERADOR E SCANNER QR
+        // ==========================================
+        
+        const QRGenerator = () => {
+            const [codigo, setCodigo] = useState('');
+            const [tipo, setTipo] = useState('');
+            const [marca, setMarca] = useState('');
+            const [peso, setPeso] = useState('');
+            const [isGenerating, setIsGenerating] = useState(false);
+            const [msgErro, setMsgErro] = useState('');
+            const qrContainerRef = useRef(null);
+
+            const handleGenerate = async () => {
+                const codeUpper = codigo.trim().toUpperCase();
+                
+                if (!PADRAO_QR.test(codeUpper)) {
+                    setMsgErro("⚠️ Código Inválido! Use o formato AF + 4 números (ex: AF1234).");
+                    return;
+                }
+
+                setIsGenerating(true);
+                setMsgErro('');
+                if (qrContainerRef.current) qrContainerRef.current.innerHTML = '';
+
+                try {
+                    const response = await fetch(QR_GAS_URL);
+                    const existentes = await response.json();
+
+                    if (existentes.includes(codeUpper)) {
+                        setMsgErro(`❌ O código ${codeUpper} já está registado na planilha! Escolha outro.`);
+                        setIsGenerating(false);
+                        return;
+                    }
+
+                    const dadosCompletos = {
+                        id: codeUpper,
+                        t: tipo || "-",
+                        m: marca || "-",
+                        p: peso || "-"
+                    };
+
+                    const stringDados = JSON.stringify(dadosCompletos);
+                    
+                    new QRCode(qrContainerRef.current, { 
+                        text: stringDados, 
+                        width: 220, 
+                        height: 220,
+                        colorDark : "#000000",
+                        colorLight : "#ffffff",
+                        correctLevel : QRCode.CorrectLevel.M 
+                    });
+
+                    // Adicionar o Label
+                    const label = document.createElement("div");
+                    label.className = "mt-4 font-bold text-2xl text-slate-900 tracking-[0.2em] font-mono";
+                    label.innerText = codeUpper;
+                    qrContainerRef.current.appendChild(label);
+
+                } catch (error) {
+                    console.error("Erro na consulta:", error);
+                    setMsgErro("⚠️ Erro ao consultar a base de dados. Verifique a ligação ou o script.");
+                } finally {
+                    setIsGenerating(false);
+                }
+            };
+
+            return (
+                <div className="animate-in fade-in duration-300 max-w-2xl mx-auto pb-20">
+                    <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-6 md:p-8">
+                        <h3 className="text-xl font-black text-slate-800 mb-6 border-b border-slate-100 pb-4">Criação de Etiqueta QR</h3>
+                        
+                        <div className="space-y-4 mb-6">
+                            <div>
+                                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Código do Equipamento</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="Ex: AF0000" 
+                                    maxLength="6"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold uppercase focus:ring-2 focus:ring-red-500 transition-all"
+                                    value={codigo}
+                                    onChange={(e) => setCodigo(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Tipo</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="Notebook, Ferramenta..." 
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold focus:ring-2 focus:ring-red-500 transition-all"
+                                    value={tipo}
+                                    onChange={(e) => setTipo(e.target.value)}
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Marca</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="Fabricante" 
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold focus:ring-2 focus:ring-red-500 transition-all"
+                                        value={marca}
+                                        onChange={(e) => setMarca(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Peso (gramas)</label>
+                                    <input 
+                                        type="number" 
+                                        placeholder="Ex: 500" 
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold focus:ring-2 focus:ring-red-500 transition-all"
+                                        value={peso}
+                                        onChange={(e) => setPeso(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {msgErro && (
+                            <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-bold border border-red-200 mb-6">
+                                {msgErro}
+                            </div>
+                        )}
+
+                        <button 
+                            onClick={handleGenerate}
+                            disabled={isGenerating || !codigo}
+                            className="w-full bg-red-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-red-700 transition-colors flex justify-center items-center gap-2 shadow-lg shadow-red-600/30 disabled:opacity-50"
+                        >
+                            {isGenerating ? <><RefreshCw size={20} className="animate-spin" /> A verificar disponibilidade...</> : 'Criar Etiqueta QR'}
+                        </button>
+
+                        {/* Contentor do QR Code */}
+                        <div className="mt-8 flex flex-col items-center justify-center min-h-[250px] border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 p-6">
+                            <div ref={qrContainerRef} className="flex flex-col items-center"></div>
+                            {!codigo && !isGenerating && qrContainerRef.current?.innerHTML === '' && (
+                                <span className="text-slate-400 font-semibold text-sm">O QR Code aparecerá aqui</span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const QRScanner = () => {
+            const [scannedItems, setScannedItems] = useState([]);
+            const [isSending, setIsSending] = useState(false);
+            const scannerRef = useRef(null);
+            const scanLock = useRef(false);
+
+            useEffect(() => {
+                const scanner = new Html5QrcodeScanner("reader", { 
+                    fps: 10, 
+                    qrbox: { width: 250, height: 250 },
+                    rememberLastUsedCamera: true,
+                    supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+                });
+                
+                scannerRef.current = scanner;
+
+                scanner.render((texto) => {
+                    if (scanLock.current) return;
+                    
+                    let itemLido;
+                    try {
+                        const obj = JSON.parse(texto);
+                        itemLido = {
+                            codigo: obj.id || "N/A",
+                            tipo: obj.t || "-",
+                            marca: obj.m || "-",
+                            peso: obj.p || "-",
+                            status: PADRAO_QR.test(obj.id) ? "Válido" : "Inválido"
+                        };
+                    } catch (e) {
+                        itemLido = {
+                            codigo: texto.trim().toUpperCase(),
+                            tipo: "-", marca: "-", peso: "-",
+                            status: PADRAO_QR.test(texto.trim()) ? "Válido" : "Inválido"
+                        };
+                    }
+                    
+                    setScannedItems(prev => {
+                        if (prev.find(i => i.codigo === itemLido.codigo)) return prev;
+                        return [...prev, itemLido];
+                    });
+                    
+                    scanLock.current = true;
+                    setTimeout(() => { scanLock.current = false; }, 2000); // Evitar leituras duplas rápidas
+                }, (error) => {
+                    // ignorar erros de scan frame
+                });
+
+                return () => {
+                    if (scannerRef.current) {
+                        scannerRef.current.clear().catch(e => console.error(e));
+                    }
+                };
+            }, []);
+
+            const removeItem = (indexToRemove) => {
+                setScannedItems(prev => prev.filter((_, idx) => idx !== indexToRemove));
+            };
+
+            const handleSendAll = async () => {
+                if (scannedItems.length === 0) return;
+                setIsSending(true);
+                let sucessos = 0;
+
+                for (const item of scannedItems) {
+                    try {
+                        const params = new URLSearchParams({
+                            'codigo': item.codigo,
+                            'tipo': item.tipo,
+                            'marca': item.marca,
+                            'peso': item.peso,
+                            'status': item.status
+                        });
+
+                        await fetch(QR_GAS_URL, {
+                            method: 'POST',
+                            mode: 'no-cors',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: params
+                        });
+                        sucessos++;
+                    } catch (e) {
+                        console.error("Erro no envio:", e);
+                    }
+                }
+
+                alert(`✅ Concluído! ${sucessos} equipamentos foram registados na planilha.`);
+                setScannedItems([]);
+                setIsSending(false);
+            };
+
+            return (
+                <div className="animate-in fade-in duration-300 max-w-4xl mx-auto pb-20">
+                    <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-6 md:p-8">
+                        <h3 className="text-xl font-black text-slate-800 mb-6 border-b border-slate-100 pb-4">Scanner de Lote (QR)</h3>
+                        
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 mb-8 overflow-hidden relative">
+                            <div id="reader" className="w-full border-none"></div>
+                        </div>
+
+                        <div className="mb-6">
+                            <h4 className="flex items-center gap-2 text-sm font-black text-slate-600 uppercase tracking-widest mb-4">
+                                Itens Identificados
+                                <span className="bg-red-600 text-white px-2 py-0.5 rounded-full text-xs">{scannedItems.length}</span>
+                            </h4>
+                            
+                            <div className="overflow-x-auto border border-slate-200 rounded-xl shadow-sm">
+                                <table className="w-full text-left text-sm">
+                                    <thead className="bg-slate-50">
+                                        <tr>
+                                            <th className="p-3 font-bold text-slate-600">Código</th>
+                                            <th className="p-3 font-bold text-slate-600">Tipo</th>
+                                            <th className="p-3 font-bold text-slate-600">Marca</th>
+                                            <th className="p-3 font-bold text-slate-600">Peso (g)</th>
+                                            <th className="p-3 font-bold text-slate-600 text-center">Ação</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {scannedItems.length > 0 ? scannedItems.map((item, idx) => (
+                                            <tr key={idx} className="hover:bg-slate-50">
+                                                <td className="p-3 font-bold text-slate-800">{item.codigo}</td>
+                                                <td className="p-3 text-slate-600">{item.tipo}</td>
+                                                <td className="p-3 text-slate-600">{item.marca}</td>
+                                                <td className="p-3 text-slate-600">{item.peso}</td>
+                                                <td className="p-3 text-center">
+                                                    <button onClick={() => removeItem(idx)} className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition-colors">
+                                                        <X size={16} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        )) : (
+                                            <tr><td colSpan="5" className="p-6 text-center text-slate-400 italic font-medium">Nenhum item escaneado ainda. Aponte a câmara para um código QR.</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        {scannedItems.length > 0 && (
+                            <button 
+                                onClick={handleSendAll}
+                                disabled={isSending}
+                                className="w-full bg-red-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-red-700 transition-colors flex justify-center items-center gap-2 shadow-lg shadow-red-600/30 disabled:opacity-50"
+                            >
+                                {isSending ? <><RefreshCw size={20} className="animate-spin" /> A sincronizar com base de dados...</> : 'Finalizar e Enviar Tudo'}
+                            </button>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+
+        // ==========================================
         // COMPONENTE PRINCIPAL DA APLICAÇÃO
         // ==========================================
         const App = () => {
@@ -230,7 +554,7 @@
             caliperAf: '',
             caliperBlock: '',
             caliperValue: '',
-            photos: [] // NOVO: Guarda as fotos capturadas
+            photos: [] 
           });
 
           useEffect(() => {
@@ -415,7 +739,6 @@
             }));
           };
 
-          // --- Manipulação de Fotos ---
           const handlePhotoUpload = (e) => {
             const files = Array.from(e.target.files);
             files.forEach(file => {
@@ -430,7 +753,7 @@
                     reader.readAsDataURL(file);
                 }
             });
-            e.target.value = null; // reset input
+            e.target.value = null;
           };
 
           const removePhoto = (index) => {
@@ -606,7 +929,6 @@
             
             setIsSaving(true);
             try {
-              // Remover as fotos (pesadas) do payload antes de enviar para o Sheets
               const { photos, ...dataToSave } = checklistData;
 
               await fetch(GAS_URL, {
@@ -817,7 +1139,8 @@
                   <h1 className="text-xl font-black tracking-tight uppercase">ODS Metering Systems</h1>
                 </div>
                 
-                <nav className="flex-1 space-y-2">
+                <nav className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-2">
+                  <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 mt-4">Gestão ODS</div>
                   <button 
                     onClick={() => { setActiveTab('inventory'); setReportMode(false); setDispatchReportMode(false); setIsMobileMenuOpen(false); }}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'inventory' ? 'bg-red-600 shadow-lg' : 'hover:bg-slate-800 text-slate-400'}`}
@@ -838,13 +1161,29 @@
                   >
                     <ClipboardCheck size={20} /> Relatório IN/OUT
                   </button>
+
+                  <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 mt-8">Sistema QR</div>
+                  
+                  <button 
+                    onClick={() => { setActiveTab('qr-generator'); setReportMode(false); setDispatchReportMode(false); setIsMobileMenuOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'qr-generator' ? 'bg-red-600 shadow-lg' : 'hover:bg-slate-800 text-slate-400'}`}
+                  >
+                    <QrCodeIcon size={20} /> Gerador de QR
+                  </button>
+
+                  <button 
+                    onClick={() => { setActiveTab('qr-scanner'); setReportMode(false); setDispatchReportMode(false); setIsMobileMenuOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'qr-scanner' ? 'bg-red-600 shadow-lg' : 'hover:bg-slate-800 text-slate-400'}`}
+                  >
+                    <ScanIcon size={20} /> Scanner de Lote
+                  </button>
                 </nav>
 
-                <div className="mt-auto p-5 bg-slate-800/40 rounded-2xl border border-slate-700/50 hidden lg:block">
+                <div className="mt-auto pt-5 border-t border-slate-700/50 hidden lg:block">
                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest mb-2 text-red-400">
                      <FileSpreadsheet size={14} /> Base de Dados
                    </div>
-                   <p className="text-[11px] text-orange-400 font-bold">Sincronização OK</p>
+                   <p className="text-[11px] text-orange-400 font-bold">Sincronização Ativa</p>
                 </div>
               </aside>
 
@@ -858,6 +1197,8 @@
                         {activeTab === 'inventory' && 'Localização de Equipamentos'}
                         {activeTab === 'dispatch' && 'Checklist de Verificação de Saída'}
                         {activeTab === 'checklist' && 'Relatório Oficial de Entrada e Saída'}
+                        {activeTab === 'qr-generator' && 'Gerador de Códigos QR'}
+                        {activeTab === 'qr-scanner' && 'Leitor de Lotes QR'}
                       </h2>
                       {activeTab === 'inventory' && (
                         <div className="flex items-center gap-2 mt-1">
@@ -881,7 +1222,7 @@
                   </header>
                 )}
 
-                {/* --- ABA 1: INVENTÁRIO --- */}
+                {/* --- RENDERIZAÇÃO CONDICIONAL DAS ABAS --- */}
                 {activeTab === 'inventory' && !reportMode && !dispatchReportMode && (
                   <div className="animate-in fade-in duration-300">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
@@ -1046,7 +1387,6 @@
                   </div>
                 )}
 
-                {/* --- ABA 2: CHECKLIST DE SEPARAÇÃO --- */}
                 {activeTab === 'dispatch' && !dispatchReportMode && (
                   <div className="animate-in fade-in duration-300 max-w-5xl mx-auto pb-20">
                     <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-6 md:p-8">
@@ -1149,7 +1489,6 @@
                   </div>
                 )}
 
-                {/* --- IMPRESSÃO CHECKLIST DE SEPARAÇÃO --- */}
                 {dispatchReportMode && activeTab === 'dispatch' && (
                   <div className="max-w-4xl mx-auto bg-white rounded-none md:rounded-[2rem] shadow-none md:shadow-xl border-0 md:border border-slate-200 p-8 md:p-12 print:p-0 print:shadow-none print:border-0 print:max-w-none print-area">
                     
@@ -1234,7 +1573,6 @@
                   </div>
                 )}
 
-                {/* --- ABA 3: RELATÓRIO IN/OUT --- */}
                 {activeTab === 'checklist' && !reportMode && (
                   <div className="animate-in fade-in duration-300 max-w-4xl mx-auto pb-20">
                     <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-6 md:p-8">
@@ -1250,7 +1588,6 @@
                         </div>
                       </div>
 
-                      {/* Informações Básicas */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                         <div>
                           <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Origem / Destino</label>
@@ -1292,7 +1629,6 @@
                         </div>
                       </div>
 
-                      {/* Seleção de Múltiplos Equipamentos */}
                       <div className="mb-8 bg-red-50 p-4 md:p-6 rounded-2xl border border-red-100">
                         <label className="block text-xs font-black text-red-800 uppercase tracking-widest mb-3">Vincular Equipamentos do Inventário</label>
                         
@@ -1363,7 +1699,6 @@
                         )}
                       </div>
 
-                      {/* Condições do Equipamento */}
                       <div className="mb-8">
                         <h3 className="text-lg font-black text-slate-800 mb-4 border-b border-slate-100 pb-2">Verificação de Condições (Aplica-se a todos)</h3>
                         <div className="space-y-4">
@@ -1434,7 +1769,6 @@
                         </div>
                       )}
 
-                      {/* --- FOTOS / EVIDÊNCIAS --- */}
                       <div className="mb-8">
                         <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Evidências Fotográficas (Opcional)</label>
                         <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
@@ -1513,7 +1847,6 @@
                   </div>
                 )}
 
-                {/* --- IMPRESSÃO RELATÓRIO IN/OUT --- */}
                 {reportMode && activeTab === 'checklist' && (
                   <div className="max-w-4xl mx-auto bg-white rounded-none md:rounded-[2rem] shadow-none md:shadow-xl border-0 md:border border-slate-200 p-8 md:p-12 print:p-0 print:shadow-none print:border-0 print:max-w-none print-area">
                     
@@ -1648,7 +1981,6 @@
                       </div>
                     </div>
 
-                    {/* --- FOTOS NO RELATÓRIO IMPRESSO --- */}
                     {(checklistData.photos && checklistData.photos.length > 0) && (
                       <div className="mb-12" style={{ pageBreakInside: 'avoid' }}>
                         <h3 className="bg-slate-200 text-slate-800 p-2 font-bold uppercase tracking-widest text-sm border border-b-0 border-slate-800">Photographic Evidence</h3>
@@ -1679,6 +2011,11 @@
 
                   </div>
                 )}
+
+                {/* --- RENDERIZAÇÃO DOS NOVOS COMPONENTES QR --- */}
+                {activeTab === 'qr-generator' && <QRGenerator />}
+                {activeTab === 'qr-scanner' && <QRScanner />}
+
               </main>
             </div>
           );
