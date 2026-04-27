@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="ODS Metering" />
     <link id="manifest-link" rel="manifest" href="" />
-    <link rel="apple-touch-icon" href="image_932347.png">
+    <link rel="apple-touch-icon" href="https://ods-metering.com/wp-content/uploads/2024/09/ODS-METERING-SYSTEMS-LOGO-V2.png">
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -92,7 +92,7 @@
                 "background_color": "#f3f4f6",
                 "theme_color": "#dc2626",
                 "icons": [
-                    { "src": "image_932347.png", "sizes": "192x192", "type": "image/png" }
+                    { "src": "https://ods-metering.com/wp-content/uploads/2024/09/ODS-METERING-SYSTEMS-LOGO-V2.png", "sizes": "192x192", "type": "image/png" }
                 ]
             };
             const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
@@ -132,13 +132,14 @@
         const QrCodeIcon = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></svg>;
         const ScanIcon = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>;
 
+
         // ==========================================
         // DADOS E CONFIGURAÇÕES
         // ==========================================
         const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTwpuFDiuBcbqZdPenl3bkfJAcdufNq3ZPDWqSoFF_kWho86G-jyUd_2x5NeRDT2UnD400bbqOjcavw/pub?gid=1535212226&single=true&output=csv"; 
         const GAS_URL = "https://script.google.com/macros/s/AKfycbxBjqHkKUj9NN99LCYOOHh4Xwg_IMJmaNKmZV3iCgYbdWT0UK2drKEABzpzOAXWlj_2/exec"; 
         const QR_GAS_URL = "https://script.google.com/macros/s/AKfycbxDicMNmZBbCkqdmPx4WjfM0WngMxGhhfAkaqRkQhj7rWbyn05LZwuUkvgASu74AXA/exec";
-        const PADRAO_QR = /^AF\s?\d{4}$/i;
+        const PADRAO_QR = /^AF\d{4}$/i;
         const INITIAL_DATA = [];
 
         const KITS_FPSO = {
@@ -244,31 +245,20 @@
                     scanLock.current = true; // Impede leituras múltiplas simultâneas
 
                     let code = texto;
-                    let fullObj = null;
-                    let equipName = "";
-                    
                     try {
-                        fullObj = JSON.parse(texto);
-                        code = fullObj.id || texto;
-                        equipName = fullObj.t || fullObj.equipment || "";
+                        const obj = JSON.parse(texto);
+                        code = obj.id || texto;
                     } catch(e) {
-                        // Trata o formato de texto direto: "AF 0295 - Caliper 200 mm"
-                        if (texto.includes(" - ")) {
-                            const parts = texto.split(" - ");
-                            code = parts[0].trim().toUpperCase();
-                            equipName = parts.slice(1).join(" - ").trim();
-                        } else {
-                            code = texto.trim().toUpperCase();
-                        }
+                        code = texto.trim().toUpperCase();
                     }
                     
                     // Espera que o scanner termine de limpar os elementos DOM antes de fechar o Modal (Evita erro innerText)
                     if (scannerRef.current) {
                         scannerRef.current.clear().then(() => {
-                            onScan(code, fullObj, equipName);
+                            onScan(code);
                         }).catch((err) => {
                             console.warn("Aviso ao limpar câmara:", err);
-                            onScan(code, fullObj, equipName);
+                            onScan(code);
                         });
                         scannerRef.current = null;
                     }
@@ -314,46 +304,15 @@
             );
         };
 
-        const QRGenerator = ({ inventory, setPrintMessage, onQrGenerated }) => {
+        const QRGenerator = ({ setPrintMessage }) => {
             const [codigo, setCodigo] = useState('');
             const [tipo, setTipo] = useState('');
             const [marca, setMarca] = useState('');
             const [peso, setPeso] = useState('');
             const [isGenerating, setIsGenerating] = useState(false);
             const [msgErro, setMsgErro] = useState('');
-            const [msgInfo, setMsgInfo] = useState(''); 
             const [qrGenerated, setQrGenerated] = useState(false);
             const qrContainerRef = useRef(null);
-
-            const handleCodigoChange = (e) => {
-                const codeInput = e.target.value.toUpperCase();
-                setCodigo(codeInput);
-                
-                // Limpa avisos
-                setMsgErro('');
-                
-                const upperCode = codeInput.trim();
-                
-                if (upperCode.length >= 4) {
-                    // Vasculha o Inventário Principal Unificado
-                    const foundInInventory = inventory.find(inv => {
-                        const ods = (inv["ods code"] || "").toUpperCase();
-                        const af = (inv["af"] || inv["número af"] || "").toUpperCase();
-                        const afDim = (inv["af dimensional"] || "").toUpperCase();
-                        return ods === upperCode || af === upperCode || afDim === upperCode;
-                    });
-
-                    if (foundInInventory) {
-                        const nomeEquipamento = foundInInventory["equipment_2"] || foundInInventory["equipment"] || '';
-                        setTipo(nomeEquipamento);
-                        setMsgInfo(`✅ Encontrado no Inventário Principal: ${nomeEquipamento}. Ação fará apenas a reimpressão visual.`);
-                    } else {
-                        setMsgInfo('');
-                    }
-                } else {
-                    setMsgInfo('');
-                }
-            };
 
             const handleGenerate = async () => {
                 const codeUpper = codigo.trim().toUpperCase();
@@ -370,52 +329,23 @@
                 if (qrContainerRef.current) qrContainerRef.current.innerHTML = '';
 
                 try {
-                    const foundInInventory = inventory.find(inv => {
-                        const ods = (inv["ods code"] || "").toUpperCase();
-                        const af = (inv["af"] || inv["número af"] || "").toUpperCase();
-                        const afDim = (inv["af dimensional"] || "").toUpperCase();
-                        return ods === codeUpper || af === codeUpper || afDim === codeUpper;
-                    });
+                    const response = await fetch(QR_GAS_URL);
+                    const existentes = await response.json();
 
-                    // Prepara a string de saída idêntica ao layout (ex: "AF 0295 - Caliper 200 mm")
-                    let stringDados = tipo ? `${codeUpper} - ${tipo}` : codeUpper;
-
-                    if (foundInInventory) {
-                        // Se já existe, não grava de novo. Apenas exibe o QR para reimpressão.
-                        const nomeEquipamento = foundInInventory["equipment_2"] || foundInInventory["equipment"] || tipo;
-                        stringDados = nomeEquipamento ? `${codeUpper} - ${nomeEquipamento}` : codeUpper;
-                        
-                        setMsgInfo(`✅ Equipamento gerado a partir do inventário para reimpressão.`);
-                    } else {
-                        // EFETUA O REGISTO NA PLANILHA USANDO O SCRIPT ORIGINAL
-                        const params = new URLSearchParams({
-                            'codigo': codeUpper,
-                            'ods_code': codeUpper,
-                            'tipo': tipo || "-",
-                            'equipment': tipo || "-",
-                            'marca': marca || "-",
-                            'peso': peso || "-",
-                            'status': 'Gerado via App'
-                        });
-
-                        await fetch(QR_GAS_URL, {
-                            method: 'POST',
-                            mode: 'no-cors',
-                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                            body: params
-                        });
-
-                        // Notifica a aplicação do novo código para pesquisas futuras na mesma sessão
-                        if (onQrGenerated) {
-                            onQrGenerated({
-                                id: `QR_${codeUpper}`,
-                                "ods code": codeUpper,
-                                "af": codeUpper,
-                                "equipment": tipo || "Equipamento QR Novo",
-                                "equipment location": "N/A"
-                            });
-                        }
+                    if (existentes.includes(codeUpper)) {
+                        setMsgErro(`❌ O código ${codeUpper} já está registado na planilha! Escolha outro.`);
+                        setIsGenerating(false);
+                        return;
                     }
+
+                    const dadosCompletos = {
+                        id: codeUpper,
+                        t: tipo || "-",
+                        m: marca || "-",
+                        p: peso || "-"
+                    };
+
+                    const stringDados = JSON.stringify(dadosCompletos);
                     
                     new QRCode(qrContainerRef.current, { 
                         text: stringDados, 
@@ -426,17 +356,17 @@
                         correctLevel : QRCode.CorrectLevel.M 
                     });
 
-                    // Adicionar o Label formatado
+                    // Adicionar o Label
                     const label = document.createElement("div");
-                    label.className = "mt-4 font-bold text-xl text-slate-900 tracking-wide text-center";
-                    label.innerText = stringDados;
+                    label.className = "mt-4 font-bold text-2xl text-slate-900 tracking-[0.2em] font-mono";
+                    label.innerText = codeUpper;
                     qrContainerRef.current.appendChild(label);
                     
                     setQrGenerated(true);
 
                 } catch (error) {
-                    console.error("Erro na geração:", error);
-                    setMsgErro("⚠️ Erro ao processar. Verifique a ligação ou o script.");
+                    console.error("Erro na consulta:", error);
+                    setMsgErro("⚠️ Erro ao consultar a base de dados. Verifique a ligação ou o script.");
                 } finally {
                     setIsGenerating(false);
                 }
@@ -460,27 +390,22 @@
                         
                         <div className="space-y-4 mb-6">
                             <div>
-                                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Código do Equipamento (AF)</label>
+                                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Código do Equipamento</label>
                                 <input 
                                     type="text" 
-                                    placeholder="Ex: AF 0000" 
-                                    maxLength="8"
+                                    placeholder="Ex: AF0000" 
+                                    maxLength="6"
                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold uppercase focus:ring-2 focus:ring-red-500 transition-all"
                                     value={codigo}
-                                    onChange={handleCodigoChange}
+                                    onChange={(e) => setCodigo(e.target.value)}
                                 />
-                                {msgInfo && (
-                                    <p className="mt-2 text-xs font-bold text-emerald-600 bg-emerald-50 p-2 rounded border border-emerald-100">
-                                        {msgInfo}
-                                    </p>
-                                )}
                             </div>
                             <div>
-                                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Tipo / Nome do Equipamento</label>
+                                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Tipo</label>
                                 <input 
                                     type="text" 
                                     placeholder="Notebook, Ferramenta..." 
-                                    className={`w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold focus:ring-2 focus:ring-red-500 transition-all ${msgInfo ? 'border-emerald-300 bg-emerald-50/30' : ''}`}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold focus:ring-2 focus:ring-red-500 transition-all"
                                     value={tipo}
                                     onChange={(e) => setTipo(e.target.value)}
                                 />
@@ -520,7 +445,7 @@
                             disabled={isGenerating || !codigo}
                             className="w-full bg-red-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-red-700 transition-colors flex justify-center items-center gap-2 shadow-lg shadow-red-600/30 disabled:opacity-50"
                         >
-                            {isGenerating ? <><RefreshCw size={20} className="animate-spin" /> A processar etiqueta...</> : 'Criar / Reimprimir Etiqueta QR'}
+                            {isGenerating ? <><RefreshCw size={20} className="animate-spin" /> A verificar disponibilidade...</> : 'Criar Etiqueta QR'}
                         </button>
 
                         {/* Contentor do QR Code */}
@@ -544,7 +469,7 @@
             );
         };
 
-        const QRScanner = ({ inventory }) => {
+        const QRScanner = () => {
             const [scannedItems, setScannedItems] = useState([]);
             const [isSending, setIsSending] = useState(false);
             const scannerRef = useRef(null);
@@ -564,40 +489,22 @@
                     if (scanLock.current) return;
                     
                     let itemLido;
-                    let codeStr = "";
-                    let obj = null;
-                    let equipNameQR = "";
-                    
                     try {
-                        obj = JSON.parse(texto);
-                        codeStr = obj.id || texto;
-                        equipNameQR = obj.t || obj.equipment || "";
+                        const obj = JSON.parse(texto);
+                        itemLido = {
+                            codigo: obj.id || "N/A",
+                            tipo: obj.t || "-",
+                            marca: obj.m || "-",
+                            peso: obj.p || "-",
+                            status: PADRAO_QR.test(obj.id) ? "Válido" : "Inválido"
+                        };
                     } catch (e) {
-                        // Trata o formato de texto direto: "AF 0295 - Caliper 200 mm"
-                        if (texto.includes(" - ")) {
-                            const parts = texto.split(" - ");
-                            codeStr = parts[0].trim().toUpperCase();
-                            equipNameQR = parts.slice(1).join(" - ").trim();
-                        } else {
-                            codeStr = texto.trim().toUpperCase();
-                        }
+                        itemLido = {
+                            codigo: texto.trim().toUpperCase(),
+                            tipo: "-", marca: "-", peso: "-",
+                            status: PADRAO_QR.test(texto.trim()) ? "Válido" : "Inválido"
+                        };
                     }
-
-                    // Tenta puxar o nome exato da base de Inventário primeiro
-                    const eqInventario = inventory.find(inv => {
-                        const ods = (inv["ods code"] || "").toUpperCase();
-                        const af = (inv["af"] || inv["número af"] || "").toUpperCase();
-                        const afDim = (inv["af dimensional"] || "").toUpperCase();
-                        return ods === codeStr || af === codeStr || afDim === codeStr;
-                    });
-                    
-                    itemLido = {
-                        codigo: codeStr,
-                        tipo: eqInventario ? (eqInventario["equipment_2"] || eqInventario["equipment"]) : (equipNameQR || "-"),
-                        marca: obj ? (obj.m || "-") : "-",
-                        peso: obj ? (obj.p || "-") : "-",
-                        status: PADRAO_QR.test(codeStr) ? "Válido" : "Inválido"
-                    };
                     
                     setScannedItems(prev => {
                         if (prev.find(i => i.codigo === itemLido.codigo)) return prev;
@@ -617,7 +524,7 @@
                         } catch(e) {}
                     }
                 };
-            }, [inventory]);
+            }, []);
 
             const removeItem = (indexToRemove) => {
                 setScannedItems(prev => prev.filter((_, idx) => idx !== indexToRemove));
@@ -632,9 +539,7 @@
                     try {
                         const params = new URLSearchParams({
                             'codigo': item.codigo,
-                            'ods_code': item.codigo,
                             'tipo': item.tipo,
-                            'equipment': item.tipo,
                             'marca': item.marca,
                             'peso': item.peso,
                             'status': item.status
@@ -652,7 +557,7 @@
                     }
                 }
 
-                alert(`✅ Concluído! ${sucessos} equipamentos registados com o script original.`);
+                alert(`✅ Concluído! ${sucessos} equipamentos foram registados na planilha.`);
                 setScannedItems([]);
                 setIsSending(false);
             };
@@ -743,7 +648,7 @@
           const [newLocationValue, setNewLocationValue] = useState('');
           const [isUpdatingLocation, setIsUpdatingLocation] = useState(false);
 
-          const [activeScanner, setActiveScanner] = useState(null); 
+          const [activeScanner, setActiveScanner] = useState(null); // Gestor do modal InlineQRScanner
 
           const [dispatchData, setDispatchData] = useState({
             date: new Date().toISOString().split('T')[0],
@@ -841,7 +746,6 @@
             if (!SHEET_URL) return;
             setLoading(true);
             try {
-              // Agora a aplicação apenas precisa de ler o INVENTÁRIO (Fonte Única de Verdade)
               const response = await fetch(SHEET_URL);
               const text = await response.text();
               const parsedData = parseCSV(text);
@@ -961,42 +865,28 @@
             }));
           };
 
-          const handleUniversalQRScan = (scannedCode, scannedObj, scannedEquipName) => {
-            const upperCode = scannedCode.toUpperCase();
-
-            // Usa apenas a base de dados do Inventário Principal (que engloba agora os novos códigos lidos)
-            let eq = inventory.find(inv => {
+          const handleUniversalQRScan = (scannedCode) => {
+            const eq = inventory.find(inv => {
                 const ods = (inv["ods code"] || "").toUpperCase();
                 const af = (inv["af"] || inv["número af"] || "").toUpperCase();
                 const afDim = (inv["af dimensional"] || "").toUpperCase();
+                const upperCode = scannedCode.toUpperCase();
                 return ods === upperCode || af === upperCode || afDim === upperCode;
             });
 
             if (!eq) {
-                // Se não encontrar no inventário, tenta utilizar as informações diretamente embutidas no próprio QR
-                if (scannedEquipName || (scannedObj && scannedObj.t)) {
-                    eq = {
-                        id: `QR_${upperCode}`,
-                        "ods code": upperCode,
-                        "af": upperCode,
-                        "equipment": scannedEquipName || scannedObj.t,
-                        "equipment location": "N/A (Via QR)"
-                    };
-                } else {
-                    setPrintMessage(`⚠️ Equipamento ${scannedCode} não encontrado no inventário.`);
-                    setTimeout(() => setPrintMessage(''), 5000);
-                    setActiveScanner(null);
-                    return;
-                }
+                setPrintMessage(`⚠️ Equipamento ${scannedCode} não encontrado no inventário.`);
+                setTimeout(() => setPrintMessage(''), 5000);
+                setActiveScanner(null);
+                return;
             }
 
             if (activeScanner.context === 'dispatch') {
-                const exactCode = eq["ods code"] || eq["af dimensional"] || eq["af"];
+                const exactCode = eq["ods code"] || eq["af dimensional"];
                 if (activeScanner.isMulti) {
                     handleDispatchItemArrayChange(activeScanner.name, exactCode);
                 } else {
                     handleDispatchItemChange(activeScanner.name, 'code', exactCode);
-                    handleDispatchItemChange(activeScanner.name, 'equipmentName', eq["equipment"] || eq["equipment_2"]);
                 }
             } else if (activeScanner.context === 'inout') {
                 if (!checklistData.selectedEquipments.some(item => item.id === eq.id)) {
@@ -1169,27 +1059,10 @@
               selectedCodes.includes(inv["ods code"])
             );
 
-            // Adiciona equipamentos que foram lidos por QR externo e que não estão no inventário listado
-            const qrEquipments = selectedCodes
-              .filter(code => !equipmentsToTransfer.some(inv => inv["ods code"] === code))
-              .map(code => {
-                 // tenta encontrar o nome guardado no state
-                 const savedItem = Object.values(dispatchData.items).find(i => i.code === code);
-                 return {
-                     id: `QR_${code}`,
-                     "ods code": code,
-                     "af": code,
-                     "equipment": savedItem && savedItem.equipmentName ? savedItem.equipmentName : "Equipamento Registo QR",
-                     "equipment location": "N/A"
-                 };
-              });
-
-            const allEquipments = [...equipmentsToTransfer, ...qrEquipments];
-
-            if (allEquipments.length > 0) {
+            if (equipmentsToTransfer.length > 0) {
               setChecklistData(prev => {
                 const existingIds = new Set(prev.selectedEquipments.map(e => e.id));
-                const newEquipments = allEquipments.filter(e => !existingIds.has(e.id));
+                const newEquipments = equipmentsToTransfer.filter(e => !existingIds.has(e.id));
                 
                 return {
                   ...prev,
@@ -1374,12 +1247,6 @@
                                 {inv["ods code"]} {inv.af ? `(${inv.af})` : ''} - {inv.equipment || inv.equipment_2}
                               </option>
                             ))}
-                            {/* Caso o código seja externo (via scanner QR) e não esteja no options */}
-                            {dispatchData.items[item.name]?.code && !filteredOptions.some(o => o["ods code"] === dispatchData.items[item.name].code) && (
-                                <option value={dispatchData.items[item.name].code}>
-                                    {dispatchData.items[item.name].code} - {dispatchData.items[item.name].equipmentName || 'Via QR'}
-                                </option>
-                            )}
                           </select>
                           <button 
                               onClick={() => setActiveScanner({ context: 'dispatch', name: item.name, isMulti: false })} 
@@ -1425,7 +1292,7 @@
               <div className="lg:hidden fixed top-0 left-0 right-0 bg-slate-900 text-white p-4 flex justify-between items-center z-30 shadow-md print:hidden">
                 <div className="flex items-center gap-3">
                   <div className="bg-white p-1 rounded-lg shadow-sm flex justify-center items-center">
-                    <img src="image_932347.png" alt="ODS Logo" className="h-6 w-auto" onError={(e) => { e.target.onerror = null; e.target.src = "https://via.placeholder.com/150x50?text=ODS+Logo"; }} />
+                    <img src="https://ods-metering.com/wp-content/uploads/2024/09/ODS-METERING-SYSTEMS-LOGO-V2.png" alt="ODS Logo" className="h-6 w-auto" />
                   </div>
                   <h1 className="text-lg font-black tracking-tight uppercase">ODS Systems</h1>
                 </div>
@@ -1443,7 +1310,7 @@
 
                 <div className="flex items-center gap-3 mb-10 mt-2 lg:mt-0">
                   <div className="bg-white p-2 rounded-xl shadow-lg shadow-red-500/20 flex justify-center items-center">
-                    <img src="image_932347.png" alt="ODS Logo" className="h-8 w-auto" onError={(e) => { e.target.onerror = null; e.target.src = "https://via.placeholder.com/150x50?text=ODS+Logo"; }} />
+                    <img src="https://ods-metering.com/wp-content/uploads/2024/09/ODS-METERING-SYSTEMS-LOGO-V2.png" alt="ODS Logo" className="h-8 w-auto" />
                   </div>
                   <h1 className="text-xl font-black tracking-tight uppercase">ODS Metering Systems</h1>
                 </div>
@@ -1798,7 +1665,6 @@
                   </div>
                 )}
 
-                {/* --- IMPRESSÃO CHECKLIST DE SEPARAÇÃO --- */}
                 {dispatchReportMode && activeTab === 'dispatch' && (
                   <div className="max-w-4xl mx-auto bg-white rounded-none md:rounded-[2rem] shadow-none md:shadow-xl border-0 md:border border-slate-200 p-8 md:p-12 print:p-0 print:shadow-none print:border-0 print:max-w-none print-area">
                     
@@ -1813,10 +1679,9 @@
 
                     <div className="flex justify-between items-center mb-8 border-b-2 border-slate-800 pb-4">
                       <img 
-                        src="image_932347.png" 
+                        src="https://ods-metering.com/wp-content/uploads/2024/09/ODS-METERING-SYSTEMS-LOGO-V2.png" 
                         alt="ODS Metering Systems Logo" 
                         className="h-12 w-auto" 
-                        onError={(e) => { e.target.onerror = null; e.target.src = "https://via.placeholder.com/150x50?text=ODS+Logo"; }}
                       />
                       <div className="text-right">
                         <h1 className="text-xl font-black uppercase">Checklist - Equipment Dispatch Verification</h1>
@@ -1884,7 +1749,6 @@
                   </div>
                 )}
 
-                {/* --- ABA 3: RELATÓRIO IN/OUT --- */}
                 {activeTab === 'checklist' && !reportMode && (
                   <div className="animate-in fade-in duration-300 max-w-4xl mx-auto pb-20">
                     <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-6 md:p-8">
@@ -1900,7 +1764,6 @@
                         </div>
                       </div>
 
-                      {/* Informações Básicas */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                         <div>
                           <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Origem / Destino</label>
@@ -1942,19 +1805,27 @@
                         </div>
                       </div>
 
-                      {/* Seleção de Múltiplos Equipamentos */}
                       <div className="mb-8 bg-red-50 p-4 md:p-6 rounded-2xl border border-red-100">
                         <label className="block text-xs font-black text-red-800 uppercase tracking-widest mb-3">Vincular Equipamentos do Inventário</label>
                         
-                        <div className="relative mb-3">
-                          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-red-400" size={18} />
-                          <input 
-                            type="text" 
-                            placeholder="Pesquisar equipamento (Ex: AF 0285, Caliper...)" 
-                            className="w-full pl-12 pr-4 py-3 bg-white border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-red-500 shadow-sm"
-                            value={equipmentSearchTerm}
-                            onChange={(e) => setEquipmentSearchTerm(e.target.value)}
-                          />
+                        <div className="relative mb-3 flex gap-2">
+                          <div className="relative flex-1">
+                              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-red-400" size={18} />
+                              <input 
+                                type="text" 
+                                placeholder="Pesquisar equipamento (Ex: AF 0285, Caliper...)" 
+                                className="w-full pl-12 pr-4 py-3 bg-white border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-red-500 shadow-sm"
+                                value={equipmentSearchTerm}
+                                onChange={(e) => setEquipmentSearchTerm(e.target.value)}
+                              />
+                          </div>
+                          <button 
+                              onClick={() => setActiveScanner({ context: 'inout', title: 'Adicionar ao Relatório' })}
+                              className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-3 rounded-xl shadow-sm transition-colors flex items-center justify-center"
+                              title="Escanear Código QR"
+                          >
+                              <ScanIcon size={20} />
+                          </button>
                         </div>
 
                         <select 
@@ -2013,7 +1884,6 @@
                         )}
                       </div>
 
-                      {/* Condições do Equipamento */}
                       <div className="mb-8">
                         <h3 className="text-lg font-black text-slate-800 mb-4 border-b border-slate-100 pb-2">Verificação de Condições (Aplica-se a todos)</h3>
                         <div className="space-y-4">
@@ -2162,7 +2032,6 @@
                   </div>
                 )}
 
-                {/* --- IMPRESSÃO RELATÓRIO IN/OUT --- */}
                 {reportMode && activeTab === 'checklist' && (
                   <div className="max-w-4xl mx-auto bg-white rounded-none md:rounded-[2rem] shadow-none md:shadow-xl border-0 md:border border-slate-200 p-8 md:p-12 print:p-0 print:shadow-none print:border-0 print:max-w-none print-area">
                     
@@ -2177,10 +2046,9 @@
 
                     <div className="text-center mb-10">
                       <img 
-                        src="image_932347.png" 
+                        src="https://ods-metering.com/wp-content/uploads/2024/09/ODS-METERING-SYSTEMS-LOGO-V2.png" 
                         alt="ODS Metering Systems Logo" 
                         className="h-16 w-auto mx-auto mb-4 print:h-12" 
-                        onError={(e) => { e.target.onerror = null; e.target.src = "https://via.placeholder.com/150x50?text=ODS+Logo"; }}
                       />
                       <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tight">Formulário de {checklistData.type === 'IN' ? 'Entrada' : 'Saída'}</h1>
                       <p className="text-slate-500 font-bold tracking-widest uppercase mt-2">Equipment {checklistData.type}</p>
@@ -2298,7 +2166,6 @@
                       </div>
                     </div>
 
-                    {/* --- FOTOS NO RELATÓRIO IMPRESSO --- */}
                     {(checklistData.photos && checklistData.photos.length > 0) && (
                       <div className="mb-12" style={{ pageBreakInside: 'avoid' }}>
                         <h3 className="bg-slate-200 text-slate-800 p-2 font-bold uppercase tracking-widest text-sm border border-b-0 border-slate-800">Photographic Evidence</h3>
@@ -2330,9 +2197,9 @@
                   </div>
                 )}
 
-                {/* --- RENDERIZAÇÃO DOS NOVOS COMPONENTES QR E MODAL --- */}
-                {activeTab === 'qr-generator' && <QRGenerator inventory={inventory} setPrintMessage={setPrintMessage} />}
-                {activeTab === 'qr-scanner' && <QRScanner inventory={inventory} />}
+                {/* --- RENDERIZAÇÃO DOS NOVOS COMPONENTES QR --- */}
+                {activeTab === 'qr-generator' && <QRGenerator setPrintMessage={setPrintMessage} />}
+                {activeTab === 'qr-scanner' && <QRScanner />}
 
                 {/* MODAL DE SCANNER INLINE UNIVERSAL */}
                 {activeScanner && (
