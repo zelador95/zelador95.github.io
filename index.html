@@ -88,6 +88,7 @@
         const Edit = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>;
         const Menu = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>;
         const ArrowDown = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>;
+        const Camera = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>;
 
         // ==========================================
         // DADOS E CONFIGURAÇÕES
@@ -228,7 +229,8 @@
             barometerAtm: '',
             caliperAf: '',
             caliperBlock: '',
-            caliperValue: ''
+            caliperValue: '',
+            photos: [] // NOVO: Guarda as fotos capturadas
           });
 
           useEffect(() => {
@@ -413,6 +415,31 @@
             }));
           };
 
+          // --- Manipulação de Fotos ---
+          const handlePhotoUpload = (e) => {
+            const files = Array.from(e.target.files);
+            files.forEach(file => {
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        setChecklistData(prev => ({
+                            ...prev,
+                            photos: [...(prev.photos || []), event.target.result]
+                        }));
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+            e.target.value = null; // reset input
+          };
+
+          const removePhoto = (index) => {
+            setChecklistData(prev => ({
+                ...prev,
+                photos: prev.photos.filter((_, i) => i !== index)
+            }));
+          };
+
           const handleKitSelection = (e) => {
             const kitName = e.target.value;
             
@@ -579,9 +606,12 @@
             
             setIsSaving(true);
             try {
+              // Remover as fotos (pesadas) do payload antes de enviar para o Sheets
+              const { photos, ...dataToSave } = checklistData;
+
               await fetch(GAS_URL, {
                 method: 'POST',
-                body: JSON.stringify(checklistData),
+                body: JSON.stringify(dataToSave),
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' }
               });
               
@@ -1404,6 +1434,41 @@
                         </div>
                       )}
 
+                      {/* --- FOTOS / EVIDÊNCIAS --- */}
+                      <div className="mb-8">
+                        <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Evidências Fotográficas (Opcional)</label>
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                                <input 
+                                    type="file" 
+                                    accept="image/*" 
+                                    capture="environment" 
+                                    multiple
+                                    id="camera-upload" 
+                                    className="hidden" 
+                                    onChange={handlePhotoUpload}
+                                />
+                                <label htmlFor="camera-upload" className="cursor-pointer flex justify-center items-center gap-2 bg-slate-800 text-white px-5 py-2.5 rounded-lg font-bold shadow hover:bg-slate-700 transition-colors">
+                                    <Camera size={18} /> Tirar Foto / Anexar
+                                </label>
+                                <span className="text-xs text-slate-500 font-medium">Use a câmera do celular ou anexe imagens.</span>
+                            </div>
+                            
+                            {(checklistData.photos && checklistData.photos.length > 0) && (
+                                <div className="flex flex-wrap gap-4 mt-4 pt-4 border-t border-slate-200">
+                                    {checklistData.photos.map((photo, index) => (
+                                        <div key={index} className="relative w-24 h-24 rounded-lg border border-slate-300 overflow-hidden shadow-sm">
+                                            <img src={photo} alt={`Foto ${index + 1}`} className="w-full h-full object-cover" />
+                                            <button onClick={() => removePhoto(index)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 shadow-md">
+                                                <X size={12} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                      </div>
+
                       <div className="mb-8">
                         <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Comentários (Non-conforming work)</label>
                         <textarea className="w-full bg-slate-50 border-none rounded-xl p-4 text-sm font-medium focus:ring-2 focus:ring-red-500 h-24 resize-none" placeholder="Detalhes caso algum equipamento esteja NOT OK..." value={checklistData.comments} onChange={(e) => handleInOutChange('comments', e.target.value)}></textarea>
@@ -1582,6 +1647,20 @@
                         {checklistData.comments || <span className="text-slate-300 italic">No comments...</span>}
                       </div>
                     </div>
+
+                    {/* --- FOTOS NO RELATÓRIO IMPRESSO --- */}
+                    {(checklistData.photos && checklistData.photos.length > 0) && (
+                      <div className="mb-12" style={{ pageBreakInside: 'avoid' }}>
+                        <h3 className="bg-slate-200 text-slate-800 p-2 font-bold uppercase tracking-widest text-sm border border-b-0 border-slate-800">Photographic Evidence</h3>
+                        <div className="border border-slate-800 p-4 grid grid-cols-2 sm:grid-cols-3 gap-4">
+                          {checklistData.photos.map((photo, index) => (
+                            <div key={index} className="border border-slate-200 p-1 rounded flex justify-center items-center bg-slate-50">
+                              <img src={photo} alt={`Evidence ${index + 1}`} className="max-w-full h-auto max-h-48 object-contain" />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="grid grid-cols-2 gap-12 mt-16 text-sm">
                       <div className="text-center">
