@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ODS Metering Systems</title>
     
-    <!-- Meta Tags para PWA (Mobile App) -->
     <meta name="theme-color" content="#dc2626" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -13,26 +12,17 @@
     <link id="manifest-link" rel="manifest" href="" />
     <link rel="apple-touch-icon" href="https://ods-metering.com/wp-content/uploads/2024/09/ODS-METERING-SYSTEMS-LOGO-V2.png">
 
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- React & ReactDOM -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    
-    <!-- Babel for JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
         body { background-color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        
-        /* Ajuste do Scrollbar */
         .custom-scrollbar::-webkit-scrollbar { height: 8px; width: 8px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 8px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        
-        /* Estilos de Impressão */
         @media print {
             body * { visibility: hidden; }
             .print-area, .print-area * { visibility: visible; }
@@ -43,7 +33,6 @@
     </style>
 
     <script>
-        // --- INJEÇÃO DINÂMICA DO PWA (Service Worker e Manifest) ---
         (function setupPWA() {
             const manifest = {
                 "name": "ODS Metering Systems",
@@ -54,26 +43,11 @@
                 "background_color": "#f3f4f6",
                 "theme_color": "#dc2626",
                 "icons": [
-                    { "src": "https://ods-metering.com/wp-content/uploads/2024/09/ODS-METERING-SYSTEMS-LOGO-V2.png", "sizes": "192x192", "type": "image/png" },
-                    { "src": "https://ods-metering.com/wp-content/uploads/2024/09/ODS-METERING-SYSTEMS-LOGO-V2.png", "sizes": "512x512", "type": "image/png" }
+                    { "src": "https://ods-metering.com/wp-content/uploads/2024/09/ODS-METERING-SYSTEMS-LOGO-V2.png", "sizes": "192x192", "type": "image/png" }
                 ]
             };
             const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
             document.getElementById('manifest-link').setAttribute('href', URL.createObjectURL(manifestBlob));
-
-            if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
-                try {
-                    const swCode = `
-                        self.addEventListener('install', (e) => { self.skipWaiting(); });
-                        self.addEventListener('activate', (e) => { e.waitUntil(clients.claim()); });
-                        self.addEventListener('fetch', (e) => {
-                            e.respondWith(fetch(e.request).catch(() => new Response('App Offline')));
-                        });
-                    `;
-                    const swBlob = new Blob([swCode], { type: 'application/javascript' });
-                    navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(()=>{});
-                } catch(e) {}
-            }
         })();
     </script>
 </head>
@@ -83,15 +57,11 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // ==========================================
-        // COMPONENTES DE ÍCONES (SUBSTITUI LUCIDE)
-        // ==========================================
         const LayoutDashboard = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>;
         const Package = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>;
         const Search = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>;
         const RefreshCw = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>;
         const MapPin = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>;
-        const Plus = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>;
         const X = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>;
         const FileSpreadsheet = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/><path d="M8 13h8"/><path d="M8 17h8"/><path d="M14 11v10"/></svg>;
         const ListIcon = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>;
@@ -104,10 +74,14 @@
         const CloudUpload = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg>;
         const ClipboardList = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg>;
         const Info = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>;
+        const Edit = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>;
+        const Menu = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>;
+        const FileText = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>;
+        const Eye = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>;
+        const Download = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
+        const UploadIcon = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
+        const Loader = ({ size=24, className="" }) => <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>;
 
-        // ==========================================
-        // DADOS E CONFIGURAÇÕES
-        // ==========================================
         const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTwpuFDiuBcbqZdPenl3bkfJAcdufNq3ZPDWqSoFF_kWho86G-jyUd_2x5NeRDT2UnD400bbqOjcavw/pub?gid=1535212226&single=true&output=csv"; 
         const GAS_URL = "https://script.google.com/macros/s/AKfycbxBjqHkKUj9NN99LCYOOHh4Xwg_IMJmaNKmZV3iCgYbdWT0UK2drKEABzpzOAXWlj_2/exec"; 
         const INITIAL_DATA = [];
@@ -191,9 +165,6 @@
           return "Verificar manual/padrão";
         };
 
-        // ==========================================
-        // COMPONENTE PRINCIPAL DA APLICAÇÃO
-        // ==========================================
         const App = () => {
           const [inventory, setInventory] = useState(INITIAL_DATA);
           const [loading, setLoading] = useState(false);
@@ -201,6 +172,7 @@
           const [activeTab, setActiveTab] = useState('inventory'); 
           const [isLocationDropdownOpen, setIsLocationDropdownOpen] = useState(false);
           const [selectedLocation, setSelectedLocation] = useState('Todas');
+          const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
           const dropdownRef = useRef(null);
 
           const [reportMode, setReportMode] = useState(false);
@@ -208,6 +180,16 @@
           const [isSaving, setIsSaving] = useState(false);
           const [equipmentSearchTerm, setEquipmentSearchTerm] = useState(''); 
           const [printMessage, setPrintMessage] = useState(''); 
+
+          const [editingLocationId, setEditingLocationId] = useState(null);
+          const [newLocationValue, setNewLocationValue] = useState('');
+          const [isUpdatingLocation, setIsUpdatingLocation] = useState(false);
+
+          // ESTADOS PARA PROCEDIMENTOS (GOOGLE DRIVE)
+          const [pdfs, setPdfs] = useState([]);
+          const [viewingPdf, setViewingPdf] = useState(null);
+          const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+          const [isLoadingPdfs, setIsLoadingPdfs] = useState(false);
 
           const [dispatchData, setDispatchData] = useState({
             date: new Date().toISOString().split('T')[0],
@@ -250,6 +232,104 @@
             document.addEventListener('mousedown', handleClickOutside);
             return () => document.removeEventListener('mousedown', handleClickOutside);
           }, []);
+
+          useEffect(() => {
+            fetchData();
+            loadPdfs();
+          }, []);
+
+          // --- INTEGRAÇÃO DE PDFS NO GOOGLE DRIVE ---
+          const loadPdfs = async () => {
+            setIsLoadingPdfs(true);
+            try {
+              const response = await fetch(GAS_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'list_pdfs' }),
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+              });
+              const result = await response.json();
+              if (result.status === 'sucesso') {
+                setPdfs(result.files);
+              }
+            } catch (err) {
+              console.error("Erro ao carregar PDFs do Drive:", err);
+            } finally {
+              setIsLoadingPdfs(false);
+            }
+          };
+
+          const handleFileUpload = async (e) => {
+              const file = e.target.files[0];
+              if (!file || file.type !== 'application/pdf') {
+                  setPrintMessage("Por favor, selecione um arquivo PDF.");
+                  setTimeout(() => setPrintMessage(''), 3000);
+                  return;
+              }
+
+              setIsUploadingPdf(true);
+              setPrintMessage("Enviando PDF para o Google Drive...");
+
+              const reader = new FileReader();
+              reader.onload = async () => {
+                  const base64Data = reader.result.split(',')[1];
+                  try {
+                      const response = await fetch(GAS_URL, {
+                          method: 'POST',
+                          body: JSON.stringify({ 
+                              action: 'upload_pdf', 
+                              filename: file.name, 
+                              base64: base64Data 
+                          }),
+                          headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                      });
+                      const result = await response.json();
+                      
+                      if (result.status === 'sucesso') {
+                          setPdfs(prev => [...prev, { id: result.id, name: result.name, url: result.url, date: result.date }]);
+                          setPrintMessage("PDF guardado no Google Drive com sucesso!");
+                      } else {
+                          setPrintMessage("Erro ao guardar o PDF.");
+                      }
+                      setTimeout(() => setPrintMessage(''), 3000);
+                  } catch (err) {
+                      console.error(err);
+                      setPrintMessage("Erro de conexão.");
+                      setTimeout(() => setPrintMessage(''), 3000);
+                  } finally {
+                      setIsUploadingPdf(false);
+                      e.target.value = null; // reset input
+                  }
+              };
+              reader.readAsDataURL(file);
+          };
+
+          const handleDownloadPdf = (pdf) => {
+              window.open(pdf.url, '_blank'); // Abre a janela do Drive para baixar
+          };
+
+          const handleViewPdf = (pdf) => {
+              const previewUrl = `https://drive.google.com/file/d/${pdf.id}/preview`;
+              setViewingPdf({ url: previewUrl, name: pdf.name });
+          };
+
+          const handleDeletePdf = async (id) => {
+              if(!window.confirm("Tem certeza que deseja excluir este PDF do Google Drive?")) return;
+              try {
+                  setPrintMessage("A excluir do Drive...");
+                  await fetch(GAS_URL, {
+                      method: 'POST',
+                      body: JSON.stringify({ action: 'delete_pdf', fileId: id }),
+                      headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                  });
+                  setPdfs(prev => prev.filter(p => p.id !== id));
+                  setPrintMessage("PDF excluído com sucesso.");
+                  setTimeout(() => setPrintMessage(''), 3000);
+              } catch (err) {
+                  console.error("Erro ao deletar", err);
+                  setPrintMessage("Erro ao excluir PDF.");
+                  setTimeout(() => setPrintMessage(''), 3000);
+              }
+          };
 
           const parseCSV = (text) => {
             const lines = text.split('\n').filter(line => line.trim() !== "");
@@ -314,10 +394,6 @@
               setLoading(false);
             }
           };
-
-          useEffect(() => {
-            fetchData();
-          }, []);
 
           const uniqueLocations = ['Todas', ...new Set(inventory.map(item => item["equipment location"]).filter(loc => loc))];
 
@@ -421,6 +497,51 @@
               ...prev,
               checks: { ...prev.checks, [checkName]: value }
             }));
+          };
+
+          const handleSaveLocation = async (item) => {
+            if (!newLocationValue.trim()) return;
+            
+            setIsUpdatingLocation(true);
+            const updatePayload = {
+              type: 'ATUALIZAÇÃO MANUAL',
+              from: item["equipment location"],
+              to: newLocationValue,
+              objective: 'Correção de Estoque',
+              selectedEquipments: [{
+                ...item,
+                equipment: item.equipment_2 || item.equipment || 'Equipamento Atualizado'
+              }],
+              integrity: 'N/A',
+              accessories: 'N/A',
+              operation: 'N/A',
+              comments: 'Atualização feita direto pela tela de inventário.',
+              verifier: 'Sistema',
+              approver: 'Sistema',
+              date: new Date().toISOString().split('T')[0]
+            };
+
+            try {
+              await fetch(GAS_URL, {
+                method: 'POST',
+                body: JSON.stringify(updatePayload),
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+              });
+              
+              setInventory(prev => prev.map(inv => 
+                inv.id === item.id ? { ...inv, "equipment location": newLocationValue } : inv
+              ));
+              
+              setPrintMessage(`Localização atualizada com sucesso!`);
+              setTimeout(() => setPrintMessage(''), 4000);
+              setEditingLocationId(null);
+            } catch (error) {
+              console.error("Erro ao atualizar:", error);
+              setPrintMessage("Erro ao atualizar localização.");
+              setTimeout(() => setPrintMessage(''), 4000);
+            } finally {
+              setIsUpdatingLocation(false);
+            }
           };
 
           const handleKitSelection = (e) => {
@@ -697,6 +818,7 @@
           return (
             <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex print:bg-white print:m-0">
               
+              {/* Toast Notification */}
               {printMessage && (
                 <div className="fixed bottom-6 right-6 bg-slate-800 text-white px-6 py-4 rounded-2xl shadow-2xl z-50 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 border border-slate-700 max-w-sm print:hidden">
                   <Info className="text-orange-400 shrink-0" size={24} />
@@ -704,8 +826,48 @@
                 </div>
               )}
 
-              <aside className="fixed inset-y-0 left-0 w-64 bg-slate-900 text-white p-6 hidden lg:flex flex-col shadow-2xl print:hidden z-10">
-                <div className="flex items-center gap-3 mb-10">
+              {/* OVERLAY PARA O MENU MOBILE */}
+              {isMobileMenuOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 lg:hidden" onClick={() => setIsMobileMenuOpen(false)}></div>
+              )}
+
+              {/* OVERLAY PARA VISUALIZAÇÃO DE PDF DO DRIVE */}
+              {viewingPdf && (
+                <div className="fixed inset-0 bg-slate-900/95 z-[100] flex flex-col p-4 md:p-8 animate-in fade-in">
+                    <div className="flex justify-between items-center mb-4 text-white">
+                        <h3 className="text-xl font-bold truncate pr-4 flex items-center gap-3">
+                          <FileText size={24} className="text-red-500" /> {viewingPdf.name}
+                        </h3>
+                        <button onClick={() => { setViewingPdf(null); }} className="bg-slate-800 hover:bg-slate-700 p-2 rounded-xl transition-colors">
+                            <X size={24} />
+                        </button>
+                    </div>
+                    <iframe src={viewingPdf.url} className="w-full flex-1 rounded-2xl bg-white border-0 shadow-2xl" title={viewingPdf.name}></iframe>
+                </div>
+              )}
+
+              {/* HEADER MOBILE */}
+              <div className="lg:hidden fixed top-0 left-0 right-0 bg-slate-900 text-white p-4 flex justify-between items-center z-30 shadow-md print:hidden">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white p-1 rounded-lg shadow-sm flex justify-center items-center">
+                    <img src="dog%20ods.png" alt="ODS Logo" className="h-6 w-auto" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
+                    <Package size={18} className="text-red-600 hidden" />
+                  </div>
+                  <h1 className="text-lg font-black tracking-tight uppercase">ODS Systems</h1>
+                </div>
+                <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors">
+                  <Menu size={24} />
+                </button>
+              </div>
+
+              {/* SIDEBAR */}
+              <aside className={`fixed inset-y-0 left-0 w-72 lg:w-64 bg-slate-900 text-white p-6 flex flex-col shadow-2xl print:hidden z-50 transition-transform duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
+                
+                <button className="lg:hidden absolute top-5 right-5 text-gray-400 hover:text-white" onClick={() => setIsMobileMenuOpen(false)}>
+                    <X size={24} />
+                </button>
+
+                <div className="flex items-center gap-3 mb-10 mt-2 lg:mt-0">
                   <div className="bg-white p-2 rounded-xl shadow-lg shadow-red-500/20 flex justify-center items-center">
                     <img 
                       src="dog%20ods.png" 
@@ -720,28 +882,35 @@
                 
                 <nav className="flex-1 space-y-2">
                   <button 
-                    onClick={() => { setActiveTab('inventory'); setReportMode(false); setDispatchReportMode(false); }}
+                    onClick={() => { setActiveTab('inventory'); setReportMode(false); setDispatchReportMode(false); setIsMobileMenuOpen(false); }}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'inventory' ? 'bg-red-600 shadow-lg' : 'hover:bg-slate-800 text-slate-400'}`}
                   >
                     <LayoutDashboard size={20} /> Inventário ODS
                   </button>
                   
                   <button 
-                    onClick={() => { setActiveTab('dispatch'); setReportMode(false); setDispatchReportMode(false); }}
+                    onClick={() => { setActiveTab('dispatch'); setReportMode(false); setDispatchReportMode(false); setIsMobileMenuOpen(false); }}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'dispatch' ? 'bg-red-600 shadow-lg' : 'hover:bg-slate-800 text-slate-400'}`}
                   >
                     <ClipboardList size={20} /> Checklist de Saída
                   </button>
 
                   <button 
-                    onClick={() => { setActiveTab('checklist'); setReportMode(false); setDispatchReportMode(false); }}
+                    onClick={() => { setActiveTab('checklist'); setReportMode(false); setDispatchReportMode(false); setIsMobileMenuOpen(false); }}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'checklist' ? 'bg-red-600 shadow-lg' : 'hover:bg-slate-800 text-slate-400'}`}
                   >
                     <ClipboardCheck size={20} /> Relatório IN/OUT
                   </button>
+
+                  <button 
+                    onClick={() => { setActiveTab('procedures'); setReportMode(false); setDispatchReportMode(false); setIsMobileMenuOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'procedures' ? 'bg-red-600 shadow-lg' : 'hover:bg-slate-800 text-slate-400'}`}
+                  >
+                    <FileText size={20} /> Procedimentos
+                  </button>
                 </nav>
 
-                <div className="mt-auto p-5 bg-slate-800/40 rounded-2xl border border-slate-700/50">
+                <div className="mt-auto p-5 bg-slate-800/40 rounded-2xl border border-slate-700/50 hidden lg:block">
                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest mb-2 text-red-400">
                      <FileSpreadsheet size={14} /> Base de Dados
                    </div>
@@ -749,15 +918,16 @@
                 </div>
               </aside>
 
-              <main className="flex-1 lg:ml-64 p-4 md:p-8 print:p-0 print:m-0 w-full">
+              <main className="flex-1 lg:ml-64 p-4 md:p-8 pt-24 lg:pt-8 print:p-0 print:m-0 w-full">
                 
                 {(!reportMode && !dispatchReportMode) && (
                   <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10 print:hidden">
                     <div>
-                      <h2 className="text-3xl font-black text-slate-800 tracking-tight italic uppercase">
+                      <h2 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight italic uppercase">
                         {activeTab === 'inventory' && 'Localização de Equipamentos'}
                         {activeTab === 'dispatch' && 'Checklist de Verificação de Saída'}
                         {activeTab === 'checklist' && 'Relatório Oficial de Entrada e Saída'}
+                        {activeTab === 'procedures' && 'Procedimentos e Manuais'}
                       </h2>
                       {activeTab === 'inventory' && (
                         <div className="flex items-center gap-2 mt-1">
@@ -785,16 +955,16 @@
                 {activeTab === 'inventory' && !reportMode && !dispatchReportMode && (
                   <div className="animate-in fade-in duration-300">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-                      <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex items-center justify-between group hover:border-red-200 transition-colors">
+                      <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-100 flex items-center justify-between group hover:border-red-200 transition-colors">
                         <div>
                           <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">
                             {searchTerm || selectedLocation !== 'Todas' ? 'Resultados Encontrados' : 'Equipamentos Totais'}
                           </h3>
-                          <p className={`text-5xl font-black ${searchTerm || selectedLocation !== 'Todas' ? 'text-red-600' : 'text-slate-900'}`}>
+                          <p className={`text-4xl md:text-5xl font-black ${searchTerm || selectedLocation !== 'Todas' ? 'text-red-600' : 'text-slate-900'}`}>
                             {filteredInventory.length}
                           </p>
                         </div>
-                        <div className="p-4 rounded-2xl bg-red-50 text-red-600 group-hover:bg-red-600 group-hover:text-white transition-all">
+                        <div className="p-4 rounded-2xl bg-red-50 text-red-600 group-hover:bg-red-600 group-hover:text-white transition-all hidden sm:block">
                           <ListIcon size={32} />
                         </div>
                       </div>
@@ -802,18 +972,18 @@
                       <div className="relative" ref={dropdownRef}>
                         <button 
                           onClick={() => setIsLocationDropdownOpen(!isLocationDropdownOpen)}
-                          className={`w-full bg-white p-8 rounded-3xl shadow-sm border flex items-center justify-between group transition-all text-left ${selectedLocation !== 'Todas' ? 'border-red-500 ring-2 ring-red-50' : 'border-slate-100 hover:border-orange-200'}`}
+                          className={`w-full bg-white p-6 md:p-8 rounded-3xl shadow-sm border flex items-center justify-between group transition-all text-left ${selectedLocation !== 'Todas' ? 'border-red-500 ring-2 ring-red-50' : 'border-slate-100 hover:border-orange-200'}`}
                         >
                           <div>
                             <div className="flex items-center gap-2 text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">
                               Localizações Distintas <ChevronDown size={12} className={`transition-transform ${isLocationDropdownOpen ? 'rotate-180' : ''}`} />
                             </div>
-                            <p className="text-5xl font-black text-slate-900">
+                            <p className="text-4xl md:text-5xl font-black text-slate-900">
                               {selectedLocation === 'Todas' ? uniqueLocations.length - 1 : 1}
                             </p>
                             {selectedLocation !== 'Todas' && <span className="text-[10px] font-bold text-red-600 uppercase mt-2 block">Filtro: {selectedLocation}</span>}
                           </div>
-                          <div className={`p-4 rounded-2xl transition-all ${selectedLocation !== 'Todas' ? 'bg-red-600 text-white' : 'bg-orange-50 text-orange-600 group-hover:bg-orange-600 group-hover:text-white'}`}>
+                          <div className={`p-4 rounded-2xl transition-all hidden sm:block ${selectedLocation !== 'Todas' ? 'bg-red-600 text-white' : 'bg-orange-50 text-orange-600 group-hover:bg-orange-600 group-hover:text-white'}`}>
                             <MapPin size={32} />
                           </div>
                         </button>
@@ -837,13 +1007,13 @@
                     </div>
 
                     <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
-                      <div className="p-8 border-b border-slate-50 flex items-center justify-between gap-4">
+                      <div className="p-6 md:p-8 border-b border-slate-50 flex items-center justify-between gap-4">
                         <div className="relative flex-1">
                           <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={22} />
                           <input 
                             type="text" 
                             placeholder="Pesquisar por ODS, AF, Equipamento ou Local..."
-                            className="w-full pl-14 pr-6 py-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-red-500 text-base font-medium transition-all shadow-inner"
+                            className="w-full pl-14 pr-6 py-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-red-500 text-sm md:text-base font-medium transition-all shadow-inner"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                           />
@@ -855,13 +1025,19 @@
                         )}
                       </div>
 
+                      <datalist id="inventory-locations-list">
+                        {uniqueLocations.filter(loc => loc !== 'Todas').map((loc, idx) => (
+                          <option key={idx} value={loc} />
+                        ))}
+                      </datalist>
+
                       <div className="overflow-x-auto custom-scrollbar">
-                        <table className="w-full text-left table-auto">
+                        <table className="w-full text-left table-auto min-w-[600px]">
                           <thead>
                             <tr className="bg-slate-50/50">
-                              <th className="px-10 py-6 text-[11px] font-black text-slate-400 uppercase tracking-widest w-48">Identificação</th>
-                              <th className="px-10 py-6 text-[11px] font-black text-slate-400 uppercase tracking-widest">Equipamento</th>
-                              <th className="px-10 py-6 text-[11px] font-black text-slate-400 uppercase tracking-widest">Localização</th>
+                              <th className="px-6 md:px-10 py-6 text-[11px] font-black text-slate-400 uppercase tracking-widest w-48">Identificação</th>
+                              <th className="px-6 md:px-10 py-6 text-[11px] font-black text-slate-400 uppercase tracking-widest">Equipamento</th>
+                              <th className="px-6 md:px-10 py-6 text-[11px] font-black text-slate-400 uppercase tracking-widest">Localização</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
@@ -872,22 +1048,61 @@
                                 
                                 return (
                                   <tr key={idx} className="hover:bg-red-50/30 transition-colors group">
-                                    <td className="px-10 py-6 align-top">
+                                    <td className="px-6 md:px-10 py-6 align-top">
                                       <div className="flex flex-col gap-1.5">
                                         <span className="inline-block bg-slate-900 text-white px-3 py-1 rounded-lg font-mono text-xs font-bold shadow-sm w-fit whitespace-nowrap">
                                           {odsCode}
                                         </span>
-                                        {af && af !== odsCode && <span className="text-red-600 font-black text-sm tracking-tight px-1 whitespace-nowrap">{af}</span>}
+                                        {af && af !== odsCode && <span className="text-red-600 font-black text-xs md:text-sm tracking-tight px-1 whitespace-nowrap">{af}</span>}
                                       </div>
                                     </td>
-                                    <td className="px-10 py-6 align-top min-w-[280px]">
-                                      <div className="font-bold text-slate-800 text-base whitespace-normal leading-snug">{equipName}</div>
+                                    <td className="px-6 md:px-10 py-6 align-top min-w-[200px] md:min-w-[280px]">
+                                      <div className="font-bold text-slate-800 text-sm md:text-base whitespace-normal leading-snug">{equipName}</div>
                                     </td>
-                                    <td className="px-10 py-6 align-top">
-                                      <div className="flex items-center gap-3 font-semibold italic w-fit px-4 py-2 rounded-xl border bg-slate-50 text-slate-600 border-slate-100">
-                                        <MapPin size={16} className="text-red-500 shrink-0" />
-                                        <span className="whitespace-normal leading-snug">{item["equipment location"]}</span>
-                                      </div>
+                                    <td className="px-6 md:px-10 py-6 align-top">
+                                      {editingLocationId === item.id ? (
+                                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                                          <input
+                                            list="inventory-locations-list"
+                                            value={newLocationValue}
+                                            onChange={(e) => setNewLocationValue(e.target.value)}
+                                            className="p-2 border border-red-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-500 w-full min-w-[150px] shadow-sm"
+                                            autoFocus
+                                          />
+                                          <div className="flex gap-2">
+                                            <button 
+                                              onClick={() => handleSaveLocation(item)}
+                                              disabled={isUpdatingLocation}
+                                              className="bg-green-500 text-white p-2 rounded hover:bg-green-600 disabled:opacity-50 transition-colors"
+                                              title="Salvar"
+                                            >
+                                              {isUpdatingLocation ? <RefreshCw size={16} className="animate-spin" /> : <ClipboardCheck size={16} />}
+                                            </button>
+                                            <button 
+                                              onClick={() => setEditingLocationId(null)}
+                                              disabled={isUpdatingLocation}
+                                              className="bg-gray-200 text-gray-700 p-2 rounded hover:bg-gray-300 disabled:opacity-50 transition-colors"
+                                              title="Cancelar"
+                                            >
+                                              <X size={16} />
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center justify-between gap-3 font-semibold italic w-fit px-3 md:px-4 py-2 rounded-xl border bg-slate-50 text-slate-600 border-slate-100 group/loc transition-all hover:border-red-200 hover:bg-red-50/30">
+                                          <div className="flex items-center gap-2 md:gap-3">
+                                            <MapPin size={16} className="text-red-500 shrink-0" />
+                                            <span className="whitespace-normal leading-snug text-xs md:text-sm">{item["equipment location"]}</span>
+                                          </div>
+                                          <button 
+                                            onClick={() => { setEditingLocationId(item.id); setNewLocationValue(item["equipment location"]); }}
+                                            className="text-gray-400 hover:text-red-600 opacity-100 lg:opacity-0 lg:group-hover/loc:opacity-100 transition-opacity p-1"
+                                            title="Editar Localização"
+                                          >
+                                            <Edit size={16} />
+                                          </button>
+                                        </div>
+                                      )}
                                     </td>
                                   </tr>
                                 );
@@ -899,10 +1114,77 @@
                   </div>
                 )}
 
+                {/* --- ABA 4: PROCEDIMENTOS (NOVA COM GOOGLE DRIVE) --- */}
+                {activeTab === 'procedures' && !reportMode && !dispatchReportMode && (
+                  <div className="animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-6 md:p-8">
+                      
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 border-b border-slate-100 pb-6 gap-4">
+                        <div>
+                            <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Procedimentos e Manuais</h3>
+                            <p className="text-slate-500 text-sm mt-1">Gerencie os manuais técnicos na nuvem do Google Drive</p>
+                        </div>
+                        <div className="w-full sm:w-auto">
+                            <input 
+                                type="file" 
+                                accept="application/pdf" 
+                                id="pdf-upload" 
+                                className="hidden" 
+                                onChange={handleFileUpload}
+                                disabled={isUploadingPdf}
+                            />
+                            <label htmlFor="pdf-upload" className={`cursor-pointer flex justify-center items-center gap-2 bg-red-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-red-700 transition-colors w-full sm:w-auto ${isUploadingPdf ? 'opacity-50 pointer-events-none' : ''}`}>
+                                {isUploadingPdf ? <Loader size={20} className="animate-spin" /> : <UploadIcon size={20} />} 
+                                {isUploadingPdf ? 'Enviando...' : 'Adicionar PDF'}
+                            </label>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                          {isLoadingPdfs ? (
+                              <div className="col-span-full p-10 text-center text-slate-400 font-medium italic flex flex-col items-center justify-center gap-3">
+                                  <Loader size={32} className="animate-spin text-red-500" />
+                                  Carregando PDFs do Drive...
+                              </div>
+                          ) : pdfs.length === 0 ? (
+                              <div className="col-span-full p-10 text-center text-slate-400 font-medium italic border-2 border-dashed border-slate-200 rounded-3xl">
+                                  Nenhum procedimento guardado na pasta. Faça o upload de um ficheiro PDF.
+                              </div>
+                          ) : (
+                              pdfs.map(pdf => (
+                                  <div key={pdf.id} className="bg-slate-50 border border-slate-200 p-5 rounded-2xl flex flex-col justify-between group hover:border-red-300 transition-colors shadow-sm">
+                                      <div className="flex items-start gap-4 mb-4">
+                                          <div className="bg-red-100 text-red-600 p-3 rounded-xl shrink-0">
+                                              <FileText size={28} />
+                                          </div>
+                                          <div className="flex-1 overflow-hidden">
+                                              <h4 className="font-bold text-slate-800 truncate" title={pdf.name}>{pdf.name}</h4>
+                                              <p className="text-xs text-slate-500 font-semibold mt-1">Adicionado a: {pdf.date}</p>
+                                          </div>
+                                      </div>
+                                      <div className="flex items-center gap-2 mt-auto pt-4 border-t border-slate-200">
+                                          <button onClick={() => handleViewPdf(pdf)} className="flex-1 flex items-center justify-center gap-2 bg-white border border-slate-300 text-slate-700 px-3 py-2 rounded-lg text-xs font-bold hover:bg-slate-100 transition-colors">
+                                              <Eye size={16} /> Ler
+                                          </button>
+                                          <button onClick={() => handleDownloadPdf(pdf)} className="flex-1 flex items-center justify-center gap-2 bg-white border border-slate-300 text-slate-700 px-3 py-2 rounded-lg text-xs font-bold hover:bg-slate-100 transition-colors">
+                                              <Download size={16} /> Baixar
+                                          </button>
+                                          <button onClick={() => handleDeletePdf(pdf.id)} className="bg-white border border-red-200 text-red-500 px-3 py-2 rounded-lg hover:bg-red-50 transition-colors" title="Apagar">
+                                              <Trash2 size={16} />
+                                          </button>
+                                      </div>
+                                  </div>
+                              ))
+                          )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* --- ABA 2: CHECKLIST DE SEPARAÇÃO --- */}
                 {activeTab === 'dispatch' && !dispatchReportMode && (
                   <div className="animate-in fade-in duration-300 max-w-5xl mx-auto pb-20">
-                    <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-8">
+                    <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-6 md:p-8">
                       
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 border-b border-slate-100 pb-8">
                         <div>
@@ -924,7 +1206,7 @@
                           <div className="flex-1">
                             <label className="block text-xs font-black text-red-800 uppercase tracking-widest mb-2">Categoria do Checklist</label>
                             <select 
-                              className="w-full bg-white border border-red-200 rounded-xl p-3 text-base font-black uppercase tracking-wide focus:ring-2 focus:ring-red-500"
+                              className="w-full bg-white border border-red-200 rounded-xl p-3 text-sm md:text-base font-black uppercase tracking-wide focus:ring-2 focus:ring-red-500"
                               value={dispatchData.type}
                               onChange={(e) => setDispatchData({...dispatchData, type: e.target.value})}
                             >
@@ -935,7 +1217,7 @@
                           {dispatchData.type === 'Temperatura e Pressão' && (
                             <div className="flex-1">
                               <label className="text-xs font-black text-red-800 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                Carregar Kit Predefinido <span className="bg-red-600 text-white px-2 py-0.5 rounded text-[10px]">Automático</span>
+                                Carregar Kit <span className="bg-red-600 text-white px-2 py-0.5 rounded text-[10px]">Automático</span>
                               </label>
                               <select 
                                 className="w-full bg-white border border-red-200 rounded-xl p-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-red-500"
@@ -953,7 +1235,7 @@
                       </div>
 
                       <div className="overflow-x-auto custom-scrollbar border border-slate-200 rounded-xl mb-8 shadow-sm">
-                        <table className="w-full text-left text-sm table-auto">
+                        <table className="w-full text-left text-sm table-auto min-w-[700px]">
                           <thead>
                             <tr className="bg-slate-100">
                               <th className="p-4 font-black text-slate-600 uppercase tracking-wider text-xs">Equipamento</th>
@@ -993,9 +1275,9 @@
 
                       <button 
                         onClick={handlePrintDispatch}
-                        className="w-full bg-red-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-red-700 transition-colors flex justify-center items-center gap-3 shadow-lg shadow-red-600/30"
+                        className="w-full bg-red-600 text-white py-4 md:py-5 rounded-2xl font-black text-sm md:text-base uppercase tracking-widest hover:bg-red-700 transition-colors flex justify-center items-center gap-3 shadow-lg shadow-red-600/30"
                       >
-                        Imprimir Checklist e Transferir para IN/OUT <Printer size={20} />
+                        Imprimir e Transferir para IN/OUT <Printer size={20} />
                       </button>
 
                     </div>
@@ -1006,11 +1288,11 @@
                 {dispatchReportMode && activeTab === 'dispatch' && (
                   <div className="max-w-4xl mx-auto bg-white rounded-none md:rounded-[2rem] shadow-none md:shadow-xl border-0 md:border border-slate-200 p-8 md:p-12 print:p-0 print:shadow-none print:border-0 print:max-w-none print-area">
                     
-                    <div className="flex justify-between items-center mb-8 pb-8 border-b border-dashed border-slate-200 print:hidden">
-                      <button onClick={() => setDispatchReportMode(false)} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 font-bold transition-colors">
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-8 pb-8 border-b border-dashed border-slate-200 print:hidden">
+                      <button onClick={() => setDispatchReportMode(false)} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 font-bold transition-colors w-full md:w-auto justify-center">
                         <ArrowLeft size={20} /> Voltar ao Formulário
                       </button>
-                      <button onClick={printReport} className="flex items-center gap-2 bg-red-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-red-700 transition-colors">
+                      <button onClick={printReport} className="flex items-center justify-center gap-2 bg-red-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-red-700 transition-colors w-full md:w-auto">
                         <Printer size={20} /> Imprimir / PDF
                       </button>
                     </div>
@@ -1091,16 +1373,16 @@
                 {/* --- ABA 3: RELATÓRIO IN/OUT --- */}
                 {activeTab === 'checklist' && !reportMode && (
                   <div className="animate-in fade-in duration-300 max-w-4xl mx-auto pb-20">
-                    <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-8">
+                    <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-6 md:p-8">
                       
-                      <div className="flex items-center justify-between border-b border-slate-100 pb-6 mb-6">
-                        <div className="flex bg-slate-100 p-1 rounded-xl">
-                          <button onClick={() => handleTypeChange('OUT')} className={`px-6 py-2.5 rounded-lg text-sm font-black uppercase tracking-wider transition-all ${checklistData.type === 'OUT' ? 'bg-white shadow-sm text-red-600' : 'text-slate-400 hover:text-slate-600'}`}>Saída (OUT)</button>
-                          <button onClick={() => handleTypeChange('IN')} className={`px-6 py-2.5 rounded-lg text-sm font-black uppercase tracking-wider transition-all ${checklistData.type === 'IN' ? 'bg-white shadow-sm text-orange-600' : 'text-slate-400 hover:text-slate-600'}`}>Entrada (IN)</button>
+                      <div className="flex flex-col sm:flex-row items-center justify-between border-b border-slate-100 pb-6 mb-6 gap-4">
+                        <div className="flex w-full sm:w-auto bg-slate-100 p-1 rounded-xl">
+                          <button onClick={() => handleTypeChange('OUT')} className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg text-sm font-black uppercase tracking-wider transition-all ${checklistData.type === 'OUT' ? 'bg-white shadow-sm text-red-600' : 'text-slate-400 hover:text-slate-600'}`}>Saída</button>
+                          <button onClick={() => handleTypeChange('IN')} className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg text-sm font-black uppercase tracking-wider transition-all ${checklistData.type === 'IN' ? 'bg-white shadow-sm text-orange-600' : 'text-slate-400 hover:text-slate-600'}`}>Entrada</button>
                         </div>
-                        <div className="text-right">
+                        <div className="text-left sm:text-right w-full sm:w-auto">
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Data</p>
-                          <input type="date" className="border-none bg-slate-50 rounded-lg px-3 py-2 text-sm font-bold mt-1" value={checklistData.date} onChange={(e) => handleInOutChange('date', e.target.value)}/>
+                          <input type="date" className="w-full sm:w-auto border-none bg-slate-50 rounded-lg px-3 py-2 text-sm font-bold mt-1" value={checklistData.date} onChange={(e) => handleInOutChange('date', e.target.value)}/>
                         </div>
                       </div>
 
@@ -1108,21 +1390,22 @@
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                         <div>
                           <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Origem / Destino</label>
-                          <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl relative">
+                          <div className="flex flex-col sm:flex-row items-center gap-3 bg-slate-50 p-3 rounded-xl relative">
                             <input 
                               list="locations-list"
                               type="text" 
                               placeholder="De..." 
-                              className="w-full bg-transparent border-none text-sm font-semibold focus:ring-0 p-0" 
+                              className="w-full bg-transparent border sm:border-none border-slate-200 rounded sm:rounded-none p-2 sm:p-0 text-sm font-semibold focus:ring-0" 
                               value={checklistData.from} 
                               onChange={(e) => handleInOutChange('from', e.target.value)} 
                             />
-                            <ArrowRight size={16} className="text-slate-400 shrink-0" />
+                            <ArrowRight size={16} className="text-slate-400 shrink-0 hidden sm:block" />
+                            <ArrowDown size={16} className="text-slate-400 shrink-0 block sm:hidden" />
                             <input 
                               list="locations-list"
                               type="text" 
                               placeholder="Para..." 
-                              className="w-full bg-transparent border-none text-sm font-semibold focus:ring-0 p-0" 
+                              className="w-full bg-transparent border sm:border-none border-slate-200 rounded sm:rounded-none p-2 sm:p-0 text-sm font-semibold focus:ring-0" 
                               value={checklistData.to} 
                               onChange={(e) => handleInOutChange('to', e.target.value)} 
                             />
@@ -1146,7 +1429,7 @@
                       </div>
 
                       {/* Seleção de Múltiplos Equipamentos */}
-                      <div className="mb-8 bg-red-50 p-6 rounded-2xl border border-red-100">
+                      <div className="mb-8 bg-red-50 p-4 md:p-6 rounded-2xl border border-red-100">
                         <label className="block text-xs font-black text-red-800 uppercase tracking-widest mb-3">Vincular Equipamentos do Inventário</label>
                         
                         <div className="relative mb-3">
@@ -1220,27 +1503,27 @@
                       <div className="mb-8">
                         <h3 className="text-lg font-black text-slate-800 mb-4 border-b border-slate-100 pb-2">Verificação de Condições (Aplica-se a todos)</h3>
                         <div className="space-y-4">
-                          <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-50 p-4 rounded-xl">
+                          <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-50 p-4 rounded-xl gap-3">
                             <div className="mb-2 md:mb-0"><p className="font-bold text-sm">Identificação e Integridade</p><p className="text-xs text-slate-500">Sem danos aparentes aos equipamentos e caixas.</p></div>
-                            <div className="flex gap-2">
-                              <button onClick={() => handleInOutChange('integrity', 'OK')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.integrity === 'OK' ? 'bg-orange-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>OK</button>
-                              <button onClick={() => handleInOutChange('integrity', 'NOT OK')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.integrity === 'NOT OK' ? 'bg-red-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>NOT OK</button>
+                            <div className="flex gap-2 w-full md:w-auto">
+                              <button onClick={() => handleInOutChange('integrity', 'OK')} className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.integrity === 'OK' ? 'bg-orange-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>OK</button>
+                              <button onClick={() => handleInOutChange('integrity', 'NOT OK')} className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.integrity === 'NOT OK' ? 'bg-red-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>NOT OK</button>
                             </div>
                           </div>
 
-                          <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-50 p-4 rounded-xl">
+                          <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-50 p-4 rounded-xl gap-3">
                             <div className="mb-2 md:mb-0"><p className="font-bold text-sm">Acessórios</p><p className="text-xs text-slate-500">Todos os acessórios previstos estão presentes, sem danos.</p></div>
-                            <div className="flex gap-2">
-                              <button onClick={() => handleInOutChange('accessories', 'OK')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.accessories === 'OK' ? 'bg-orange-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>OK</button>
-                              <button onClick={() => handleInOutChange('accessories', 'NOT OK')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.accessories === 'NOT OK' ? 'bg-red-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>NOT OK</button>
+                            <div className="flex gap-2 w-full md:w-auto">
+                              <button onClick={() => handleInOutChange('accessories', 'OK')} className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.accessories === 'OK' ? 'bg-orange-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>OK</button>
+                              <button onClick={() => handleInOutChange('accessories', 'NOT OK')} className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.accessories === 'NOT OK' ? 'bg-red-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>NOT OK</button>
                             </div>
                           </div>
 
-                          <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-50 p-4 rounded-xl">
+                          <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-50 p-4 rounded-xl gap-3">
                             <div className="mb-2 md:mb-0"><p className="font-bold text-sm">Operação do Equipamento</p><p className="text-xs text-slate-500">Equipamentos ligam e funcionam adequadamente.</p></div>
-                            <div className="flex gap-2">
-                              <button onClick={() => handleInOutChange('operation', 'OK')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.operation === 'OK' ? 'bg-orange-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>OK</button>
-                              <button onClick={() => handleInOutChange('operation', 'NOT OK')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.operation === 'NOT OK' ? 'bg-red-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>NOT OK</button>
+                            <div className="flex gap-2 w-full md:w-auto">
+                              <button onClick={() => handleInOutChange('operation', 'OK')} className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.operation === 'OK' ? 'bg-orange-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>OK</button>
+                              <button onClick={() => handleInOutChange('operation', 'NOT OK')} className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${checklistData.operation === 'NOT OK' ? 'bg-red-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>NOT OK</button>
                             </div>
                           </div>
                         </div>
@@ -1266,7 +1549,7 @@
                             <div className="space-y-4 mb-6 pb-6 border-b border-orange-200 last:border-0 last:pb-0 last:mb-0">
                               <p className="text-sm font-bold text-slate-800">Barômetro (Barometer)</p>
                               <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">1: A diferença de valores atmosféricos não deve exceder 0,1 kPa</p>
-                              <div className="grid grid-cols-2 gap-4">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <input type="text" placeholder="Barometer AF" className="bg-white border border-slate-200 rounded-lg p-3 text-sm" value={checklistData.barometerAf} onChange={(e) => handleInOutChange('barometerAf', e.target.value)} />
                                 <input type="text" placeholder="Atmospheric Value" className="bg-white border border-slate-200 rounded-lg p-3 text-sm" value={checklistData.barometerAtm} onChange={(e) => handleInOutChange('barometerAtm', e.target.value)} />
                               </div>
@@ -1277,7 +1560,7 @@
                             <div className="space-y-4 mb-6 pb-6 border-b border-orange-200 last:border-0 last:pb-0 last:mb-0">
                               <p className="text-sm font-bold text-slate-800">Paquímetro (Caliper)</p>
                               <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">2: A diferença do Bloco Padrão e o Valor Lido não deve exceder 0,03 mm</p>
-                              <div className="grid grid-cols-3 gap-4">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <input type="text" placeholder="Caliper AF" className="bg-white border border-slate-200 rounded-lg p-3 text-sm" value={checklistData.caliperAf} onChange={(e) => handleInOutChange('caliperAf', e.target.value)} />
                                 <input type="text" placeholder="Standard block (mm)" className="bg-white border border-slate-200 rounded-lg p-3 text-sm" value={checklistData.caliperBlock} onChange={(e) => handleInOutChange('caliperBlock', e.target.value)} />
                                 <input type="text" placeholder="Value (mm)" className="bg-white border border-slate-200 rounded-lg p-3 text-sm" value={checklistData.caliperValue} onChange={(e) => handleInOutChange('caliperValue', e.target.value)} />
@@ -1312,7 +1595,7 @@
                           disabled={checklistData.selectedEquipments.length === 0 || isSaving}
                           className="flex-1 bg-slate-100 text-slate-700 py-4 rounded-2xl font-black tracking-wide hover:bg-slate-200 transition-colors disabled:opacity-50"
                         >
-                          Gerar Relatório sem Guardar
+                          Gerar Relatório
                         </button>
                         <button 
                           onClick={handleSaveAndGenerate}
@@ -1320,9 +1603,9 @@
                           className="flex-[2] bg-red-600 text-white py-4 rounded-2xl font-black tracking-wide hover:bg-red-700 transition-colors disabled:opacity-50 flex justify-center items-center gap-3 shadow-lg shadow-red-500/30"
                         >
                           {isSaving ? (
-                            <><RefreshCw size={20} className="animate-spin" /> A guardar dados na nuvem...</>
+                            <><RefreshCw size={20} className="animate-spin" /> Guardando...</>
                           ) : (
-                            <><CloudUpload size={20} /> Guardar no Sheets e Gerar Relatório</>
+                            <><CloudUpload size={20} /> Guardar no Sheets e Gerar</>
                           )}
                         </button>
                       </div>
@@ -1335,11 +1618,11 @@
                 {reportMode && activeTab === 'checklist' && (
                   <div className="max-w-4xl mx-auto bg-white rounded-none md:rounded-[2rem] shadow-none md:shadow-xl border-0 md:border border-slate-200 p-8 md:p-12 print:p-0 print:shadow-none print:border-0 print:max-w-none print-area">
                     
-                    <div className="flex justify-between items-center mb-8 pb-8 border-b border-dashed border-slate-200 print:hidden">
-                      <button onClick={() => setReportMode(false)} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 font-bold transition-colors">
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-8 pb-8 border-b border-dashed border-slate-200 print:hidden">
+                      <button onClick={() => setReportMode(false)} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 font-bold transition-colors w-full md:w-auto justify-center">
                         <ArrowLeft size={20} /> Voltar ao Formulário
                       </button>
-                      <button onClick={printReport} className="flex items-center gap-2 bg-red-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-red-700 transition-colors">
+                      <button onClick={printReport} className="flex items-center justify-center gap-2 bg-red-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-red-700 transition-colors w-full md:w-auto">
                         <Printer size={20} /> Imprimir / PDF
                       </button>
                     </div>
