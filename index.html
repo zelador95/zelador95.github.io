@@ -245,9 +245,10 @@
                     scanLock.current = true; // Impede leituras múltiplas simultâneas
 
                     let code = texto;
+                    let fullObj = null;
                     try {
-                        const obj = JSON.parse(texto);
-                        code = obj.id || texto;
+                        fullObj = JSON.parse(texto);
+                        code = fullObj.id || texto;
                     } catch(e) {
                         code = texto.trim().toUpperCase();
                     }
@@ -255,10 +256,10 @@
                     // Espera que o scanner termine de limpar os elementos DOM antes de fechar o Modal (Evita erro innerText)
                     if (scannerRef.current) {
                         scannerRef.current.clear().then(() => {
-                            onScan(code);
+                            onScan(code, fullObj);
                         }).catch((err) => {
                             console.warn("Aviso ao limpar câmara:", err);
-                            onScan(code);
+                            onScan(code, fullObj);
                         });
                         scannerRef.current = null;
                     }
@@ -304,15 +305,46 @@
             );
         };
 
-        const QRGenerator = ({ setPrintMessage, qrCodes, onQrGenerated }) => {
+        const QRGenerator = ({ inventory, setPrintMessage, qrCodes, onQrGenerated }) => {
             const [codigo, setCodigo] = useState('');
             const [tipo, setTipo] = useState('');
             const [marca, setMarca] = useState('');
             const [peso, setPeso] = useState('');
             const [isGenerating, setIsGenerating] = useState(false);
             const [msgErro, setMsgErro] = useState('');
+            const [msgInfo, setMsgInfo] = useState(''); // Estado para mensagem de sucesso do inventário
             const [qrGenerated, setQrGenerated] = useState(false);
             const qrContainerRef = useRef(null);
+
+            const handleCodigoChange = (e) => {
+                const codeInput = e.target.value.toUpperCase();
+                setCodigo(codeInput);
+                
+                // Limpa avisos
+                setMsgErro('');
+                
+                const upperCode = codeInput.trim();
+                
+                if (upperCode.length >= 4) {
+                    // Vasculha o Inventário Principal
+                    const foundInInventory = inventory.find(inv => {
+                        const ods = (inv["ods code"] || "").toUpperCase();
+                        const af = (inv["af"] || inv["número af"] || "").toUpperCase();
+                        const afDim = (inv["af dimensional"] || "").toUpperCase();
+                        return ods === upperCode || af === upperCode || afDim === upperCode;
+                    });
+
+                    if (foundInInventory) {
+                        const nomeEquipamento = foundInInventory["equipment_2"] || foundInInventory["equipment"] || '';
+                        setTipo(nomeEquipamento);
+                        setMsgInfo(`✅ Encontrado no Inventário Principal: ${nomeEquipamento}`);
+                    } else {
+                        setMsgInfo('');
+                    }
+                } else {
+                    setMsgInfo('');
+                }
+            };
 
             const handleGenerate = async () => {
                 const codeUpper = codigo.trim().toUpperCase();
@@ -329,9 +361,9 @@
                 if (qrContainerRef.current) qrContainerRef.current.innerHTML = '';
 
                 try {
-                    // Verifica rapidamente no estado local se já existe
+                    // Verifica rapidamente no estado local se já existe na folha QR
                     if (qrCodes && qrCodes.includes(codeUpper)) {
-                        setMsgErro(`❌ O código ${codeUpper} já está registado na planilha! Escolha outro.`);
+                        setMsgErro(`❌ O código ${codeUpper} já está registado na planilha de QR Codes! Escolha outro ou utilize o inventário.`);
                         setIsGenerating(false);
                         return;
                     }
@@ -341,7 +373,7 @@
                     const existentes = await response.json();
 
                     if (existentes.includes(codeUpper)) {
-                        setMsgErro(`❌ O código ${codeUpper} já está registado na planilha! Escolha outro.`);
+                        setMsgErro(`❌ O código ${codeUpper} já está registado na planilha de QR Codes!`);
                         setIsGenerating(false);
                         return;
                     }
@@ -355,7 +387,7 @@
 
                     const stringDados = JSON.stringify(dadosCompletos);
 
-                    // EFETUA O REGISTO DIRETO NA PLANILHA
+                    // EFETUA O REGISTO DIRETO NA PLANILHA DE QR
                     const params = new URLSearchParams({
                         'codigo': dadosCompletos.id,
                         'tipo': dadosCompletos.t,
@@ -419,22 +451,27 @@
                         
                         <div className="space-y-4 mb-6">
                             <div>
-                                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Código do Equipamento</label>
+                                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Código do Equipamento (AF)</label>
                                 <input 
                                     type="text" 
                                     placeholder="Ex: AF0000" 
                                     maxLength="6"
                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold uppercase focus:ring-2 focus:ring-red-500 transition-all"
                                     value={codigo}
-                                    onChange={(e) => setCodigo(e.target.value)}
+                                    onChange={handleCodigoChange}
                                 />
+                                {msgInfo && (
+                                    <p className="mt-2 text-xs font-bold text-emerald-600 bg-emerald-50 p-2 rounded border border-emerald-100">
+                                        {msgInfo}
+                                    </p>
+                                )}
                             </div>
                             <div>
-                                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Tipo</label>
+                                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Tipo / Nome do Equipamento</label>
                                 <input 
                                     type="text" 
                                     placeholder="Notebook, Ferramenta..." 
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold focus:ring-2 focus:ring-red-500 transition-all"
+                                    className={`w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold focus:ring-2 focus:ring-red-500 transition-all ${msgInfo ? 'border-emerald-300 bg-emerald-50/30' : ''}`}
                                     value={tipo}
                                     onChange={(e) => setTipo(e.target.value)}
                                 />
@@ -498,7 +535,7 @@
             );
         };
 
-        const QRScanner = () => {
+        const QRScanner = ({ inventory }) => {
             const [scannedItems, setScannedItems] = useState([]);
             const [isSending, setIsSending] = useState(false);
             const scannerRef = useRef(null);
@@ -518,22 +555,31 @@
                     if (scanLock.current) return;
                     
                     let itemLido;
+                    let codeStr = "";
+                    let obj = null;
+                    
                     try {
-                        const obj = JSON.parse(texto);
-                        itemLido = {
-                            codigo: obj.id || "N/A",
-                            tipo: obj.t || "-",
-                            marca: obj.m || "-",
-                            peso: obj.p || "-",
-                            status: PADRAO_QR.test(obj.id) ? "Válido" : "Inválido"
-                        };
+                        obj = JSON.parse(texto);
+                        codeStr = obj.id || texto;
                     } catch (e) {
-                        itemLido = {
-                            codigo: texto.trim().toUpperCase(),
-                            tipo: "-", marca: "-", peso: "-",
-                            status: PADRAO_QR.test(texto.trim()) ? "Válido" : "Inválido"
-                        };
+                        codeStr = texto.trim().toUpperCase();
                     }
+
+                    // Tenta puxar o nome exato da base de Inventário primeiro
+                    const eqInventario = inventory.find(inv => {
+                        const ods = (inv["ods code"] || "").toUpperCase();
+                        const af = (inv["af"] || inv["número af"] || "").toUpperCase();
+                        const afDim = (inv["af dimensional"] || "").toUpperCase();
+                        return ods === codeStr || af === codeStr || afDim === codeStr;
+                    });
+                    
+                    itemLido = {
+                        codigo: codeStr,
+                        tipo: eqInventario ? (eqInventario["equipment_2"] || eqInventario["equipment"]) : (obj ? (obj.t || "-") : "-"),
+                        marca: obj ? (obj.m || "-") : "-",
+                        peso: obj ? (obj.p || "-") : "-",
+                        status: PADRAO_QR.test(codeStr) ? "Válido" : "Inválido"
+                    };
                     
                     setScannedItems(prev => {
                         if (prev.find(i => i.codigo === itemLido.codigo)) return prev;
@@ -553,7 +599,7 @@
                         } catch(e) {}
                     }
                 };
-            }, []);
+            }, [inventory]);
 
             const removeItem = (indexToRemove) => {
                 setScannedItems(prev => prev.filter((_, idx) => idx !== indexToRemove));
@@ -906,10 +952,10 @@
             }));
           };
 
-          const handleUniversalQRScan = (scannedCode) => {
+          const handleUniversalQRScan = (scannedCode, scannedObj) => {
             const upperCode = scannedCode.toUpperCase();
 
-            // Tenta encontrar o equipamento na base de dados principal (Inventário)
+            // Tenta encontrar o equipamento na base de dados principal (Inventário) primeiro
             let eq = inventory.find(inv => {
                 const ods = (inv["ods code"] || "").toUpperCase();
                 const af = (inv["af"] || inv["número af"] || "").toUpperCase();
@@ -918,14 +964,14 @@
             });
 
             if (!eq) {
-                // Se não encontrar no inventário principal, vasculha na planilha de QR codes
-                if (qrCodes.includes(upperCode)) {
+                // Se não encontrar no inventário principal, verifica na planilha de QR codes ou no próprio payload do QR
+                if (qrCodes.includes(upperCode) || (scannedObj && scannedObj.id === upperCode)) {
                     // Cria um objecto equipamento "virtual" baseado no código QR para preencher o formulário
                     eq = {
                         id: `QR_${upperCode}`,
                         "ods code": upperCode,
                         "af": upperCode,
-                        "equipment": "Equipamento Registo QR",
+                        "equipment": scannedObj ? scannedObj.t : "Equipamento Registo QR",
                         "equipment location": "N/A (Via QR)"
                     };
                 } else {
@@ -2270,8 +2316,8 @@
                 )}
 
                 {/* --- RENDERIZAÇÃO DOS NOVOS COMPONENTES QR --- */}
-                {activeTab === 'qr-generator' && <QRGenerator setPrintMessage={setPrintMessage} qrCodes={qrCodes} onQrGenerated={(newCode) => setQrCodes(prev => [...prev, newCode])} />}
-                {activeTab === 'qr-scanner' && <QRScanner />}
+                {activeTab === 'qr-generator' && <QRGenerator inventory={inventory} setPrintMessage={setPrintMessage} qrCodes={qrCodes} onQrGenerated={(newCode) => setQrCodes(prev => [...prev, newCode])} />}
+                {activeTab === 'qr-scanner' && <QRScanner inventory={inventory} />}
 
                 {/* MODAL DE SCANNER INLINE UNIVERSAL */}
                 {activeScanner && (
