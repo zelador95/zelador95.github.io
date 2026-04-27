@@ -39,14 +39,30 @@
             body * { visibility: hidden; }
             .print-area, .print-area * { visibility: visible; }
             .print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 0; margin: 0; }
+            
+            /* Regras de impressão específicas para a Etiqueta QR isolada */
+            .qr-print-area, .qr-print-area * { visibility: visible !important; }
+            .qr-print-area { 
+                position: absolute !important; 
+                left: 50% !important; 
+                top: 5cm !important; 
+                transform: translateX(-50%) !important; 
+                text-align: center !important; 
+                width: auto !important;
+                background: white !important;
+                border: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+
             .no-print { display: none !important; }
             @page { margin: 1cm; }
         }
 
         /* Ajustes específicos para a biblioteca do Scanner QR dentro do Tailwind */
-        #reader { border: none !important; }
-        #reader__dashboard_section_csr span { color: #334155; font-family: inherit; }
-        #reader button { 
+        #reader, #inline-reader { border: none !important; }
+        #reader__dashboard_section_csr span, #inline-reader__dashboard_section_csr span { color: #334155; font-family: inherit; }
+        #reader button, #inline-reader button { 
             background-color: #dc2626 !important; 
             color: white !important; 
             border-radius: 0.5rem !important; 
@@ -55,12 +71,14 @@
             font-weight: 600 !important;
             margin: 5px !important;
         }
-        #reader select {
+        #reader select, #inline-reader select {
             padding: 0.5rem !important;
             border-radius: 0.5rem !important;
             border: 1px solid #cbd5e1 !important;
             margin-bottom: 10px !important;
+            width: 100%;
         }
+        #inline-reader video { border-radius: 0.75rem !important; width: 100% !important; object-fit: cover; }
     </style>
 
     <script>
@@ -207,13 +225,93 @@
         // COMPONENTES: GERADOR E SCANNER QR
         // ==========================================
         
-        const QRGenerator = () => {
+        // Componente Modal Reutilizável para Scans rápidos (Checklist e Dispatch)
+        const InlineQRScanner = ({ onScan, onClose, title }) => {
+            const scannerRef = useRef(null);
+            const scanLock = useRef(false);
+
+            useEffect(() => {
+                const scanner = new Html5QrcodeScanner("inline-reader", {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 },
+                    rememberLastUsedCamera: true,
+                    supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+                });
+                
+                scannerRef.current = scanner;
+                
+                scanner.render((texto) => {
+                    if (scanLock.current) return;
+                    scanLock.current = true; // Impede leituras múltiplas simultâneas
+
+                    let code = texto;
+                    try {
+                        const obj = JSON.parse(texto);
+                        code = obj.id || texto;
+                    } catch(e) {
+                        code = texto.trim().toUpperCase();
+                    }
+                    
+                    // Espera que o scanner termine de limpar os elementos DOM antes de fechar o Modal (Evita erro innerText)
+                    if (scannerRef.current) {
+                        scannerRef.current.clear().then(() => {
+                            onScan(code);
+                        }).catch((err) => {
+                            console.warn("Aviso ao limpar câmara:", err);
+                            onScan(code);
+                        });
+                        scannerRef.current = null;
+                    }
+                }, (err) => {
+                    // ignorar frames falhados
+                });
+                
+                return () => {
+                    if (scannerRef.current) {
+                        try {
+                            scannerRef.current.clear().catch(e => console.warn(e));
+                        } catch(e) {}
+                    }
+                };
+            }, [onScan]);
+
+            const handleCloseClick = () => {
+                if (scanLock.current) return;
+                scanLock.current = true;
+
+                if (scannerRef.current) {
+                    scannerRef.current.clear().then(() => {
+                        onClose();
+                    }).catch((err) => {
+                        console.warn("Aviso ao limpar câmara:", err);
+                        onClose();
+                    });
+                    scannerRef.current = null;
+                } else {
+                    onClose();
+                }
+            };
+            
+            return (
+                <div className="fixed inset-0 bg-slate-900/80 z-[100] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-md relative animate-in zoom-in-95 duration-200">
+                        <button onClick={handleCloseClick} className="absolute top-4 right-4 text-slate-400 hover:text-red-500 z-10 bg-white rounded-full p-1 shadow-sm"><X size={20} /></button>
+                        <h3 className="text-sm font-black text-slate-800 mb-4 pr-8 uppercase tracking-widest">{title}</h3>
+                        <div id="inline-reader" className="w-full border-none overflow-hidden rounded-xl bg-slate-50 relative min-h-[300px]"></div>
+                        <button onClick={handleCloseClick} className="w-full mt-4 bg-slate-100 text-slate-700 py-3 rounded-xl font-bold uppercase tracking-widest hover:bg-slate-200 transition-colors">Cancelar</button>
+                    </div>
+                </div>
+            );
+        };
+
+        const QRGenerator = ({ setPrintMessage }) => {
             const [codigo, setCodigo] = useState('');
             const [tipo, setTipo] = useState('');
             const [marca, setMarca] = useState('');
             const [peso, setPeso] = useState('');
             const [isGenerating, setIsGenerating] = useState(false);
             const [msgErro, setMsgErro] = useState('');
+            const [qrGenerated, setQrGenerated] = useState(false);
             const qrContainerRef = useRef(null);
 
             const handleGenerate = async () => {
@@ -221,11 +319,13 @@
                 
                 if (!PADRAO_QR.test(codeUpper)) {
                     setMsgErro("⚠️ Código Inválido! Use o formato AF + 4 números (ex: AF1234).");
+                    setQrGenerated(false);
                     return;
                 }
 
                 setIsGenerating(true);
                 setMsgErro('');
+                setQrGenerated(false);
                 if (qrContainerRef.current) qrContainerRef.current.innerHTML = '';
 
                 try {
@@ -261,12 +361,25 @@
                     label.className = "mt-4 font-bold text-2xl text-slate-900 tracking-[0.2em] font-mono";
                     label.innerText = codeUpper;
                     qrContainerRef.current.appendChild(label);
+                    
+                    setQrGenerated(true);
 
                 } catch (error) {
                     console.error("Erro na consulta:", error);
                     setMsgErro("⚠️ Erro ao consultar a base de dados. Verifique a ligação ou o script.");
                 } finally {
                     setIsGenerating(false);
+                }
+            };
+
+            const handlePrintQr = () => {
+                try {
+                    window.print();
+                    if (setPrintMessage) setPrintMessage("Dica: Se a janela de impressão não abriu, utilize o atalho Ctrl + P (ou Cmd + P).");
+                    setTimeout(() => { if(setPrintMessage) setPrintMessage(''); }, 8000);
+                } catch (e) {
+                    if (setPrintMessage) setPrintMessage("A impressão direta foi bloqueada pelo navegador. Pressione Ctrl + P para imprimir.");
+                    setTimeout(() => { if(setPrintMessage) setPrintMessage(''); }, 8000);
                 }
             };
 
@@ -336,12 +449,21 @@
                         </button>
 
                         {/* Contentor do QR Code */}
-                        <div className="mt-8 flex flex-col items-center justify-center min-h-[250px] border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 p-6">
+                        <div className="mt-8 flex flex-col items-center justify-center min-h-[250px] border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 p-6 qr-print-area">
                             <div ref={qrContainerRef} className="flex flex-col items-center"></div>
                             {!codigo && !isGenerating && qrContainerRef.current?.innerHTML === '' && (
                                 <span className="text-slate-400 font-semibold text-sm">O QR Code aparecerá aqui</span>
                             )}
                         </div>
+
+                        {qrGenerated && (
+                            <button 
+                                onClick={handlePrintQr}
+                                className="mt-4 w-full bg-slate-800 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-slate-900 transition-colors flex justify-center items-center gap-2 shadow-lg shadow-slate-800/30 print:hidden"
+                            >
+                                <Printer size={20} /> Imprimir Etiqueta QR
+                            </button>
+                        )}
                     </div>
                 </div>
             );
@@ -397,7 +519,9 @@
 
                 return () => {
                     if (scannerRef.current) {
-                        scannerRef.current.clear().catch(e => console.error(e));
+                        try {
+                            scannerRef.current.clear().catch(e => console.warn(e));
+                        } catch(e) {}
                     }
                 };
             }, []);
@@ -523,6 +647,8 @@
           const [editingLocationId, setEditingLocationId] = useState(null);
           const [newLocationValue, setNewLocationValue] = useState('');
           const [isUpdatingLocation, setIsUpdatingLocation] = useState(false);
+
+          const [activeScanner, setActiveScanner] = useState(null); // Gestor do modal InlineQRScanner
 
           const [dispatchData, setDispatchData] = useState({
             date: new Date().toISOString().split('T')[0],
@@ -737,6 +863,38 @@
               ...prev,
               checks: { ...prev.checks, [checkName]: value }
             }));
+          };
+
+          const handleUniversalQRScan = (scannedCode) => {
+            const eq = inventory.find(inv => {
+                const ods = (inv["ods code"] || "").toUpperCase();
+                const af = (inv["af"] || inv["número af"] || "").toUpperCase();
+                const afDim = (inv["af dimensional"] || "").toUpperCase();
+                const upperCode = scannedCode.toUpperCase();
+                return ods === upperCode || af === upperCode || afDim === upperCode;
+            });
+
+            if (!eq) {
+                setPrintMessage(`⚠️ Equipamento ${scannedCode} não encontrado no inventário.`);
+                setTimeout(() => setPrintMessage(''), 5000);
+                setActiveScanner(null);
+                return;
+            }
+
+            if (activeScanner.context === 'dispatch') {
+                const exactCode = eq["ods code"] || eq["af dimensional"];
+                if (activeScanner.isMulti) {
+                    handleDispatchItemArrayChange(activeScanner.name, exactCode);
+                } else {
+                    handleDispatchItemChange(activeScanner.name, 'code', exactCode);
+                }
+            } else if (activeScanner.context === 'inout') {
+                if (!checklistData.selectedEquipments.some(item => item.id === eq.id)) {
+                    handleInOutChange('selectedEquipments', [...checklistData.selectedEquipments, eq]);
+                }
+            }
+            
+            setActiveScanner(null);
           };
 
           const handlePhotoUpload = (e) => {
@@ -1038,18 +1196,27 @@
                   <td className="p-4">
                     {isMulti ? (
                       <div className="flex flex-col gap-2">
-                        <select 
-                          className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-semibold focus:ring-2 focus:ring-red-500"
-                          value=""
-                          onChange={(e) => handleDispatchItemArrayChange(item.name, e.target.value)}
-                        >
-                          <option value="">-- Adicionar ODS --</option>
-                          {filteredOptions.map(inv => (
-                            <option key={inv.id} value={inv["ods code"]}>
-                              {inv["ods code"]} {inv.af ? `(${inv.af})` : ''} - {inv.equipment || inv.equipment_2}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="flex gap-2">
+                            <select 
+                              className="flex-1 bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-semibold focus:ring-2 focus:ring-red-500"
+                              value=""
+                              onChange={(e) => handleDispatchItemArrayChange(item.name, e.target.value)}
+                            >
+                              <option value="">-- Adicionar ODS --</option>
+                              {filteredOptions.map(inv => (
+                                <option key={inv.id} value={inv["ods code"]}>
+                                  {inv["ods code"]} {inv.af ? `(${inv.af})` : ''} - {inv.equipment || inv.equipment_2}
+                                </option>
+                              ))}
+                            </select>
+                            <button 
+                                onClick={() => setActiveScanner({ context: 'dispatch', name: item.name, isMulti: true })} 
+                                className="bg-slate-800 hover:bg-slate-700 text-white p-2.5 rounded-lg transition-colors shadow-sm" 
+                                title="Escanear QR"
+                            >
+                                <ScanIcon size={16} />
+                            </button>
+                        </div>
                         
                         {dispatchData.items[item.name]?.codes?.length > 0 && (
                           <div className="flex flex-wrap gap-1.5">
@@ -1068,18 +1235,27 @@
                         )}
                       </div>
                     ) : (
-                      <select 
-                        className={`w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-semibold focus:ring-2 focus:ring-red-500 ${dispatchData.items[item.name]?.code ? 'border-red-400 bg-red-50' : ''}`}
-                        value={dispatchData.items[item.name]?.code || ''}
-                        onChange={(e) => handleDispatchItemChange(item.name, 'code', e.target.value)}
-                      >
-                        <option value="">-- Selecionar ODS / N/A --</option>
-                        {filteredOptions.map(inv => (
-                          <option key={inv.id} value={inv["ods code"]}>
-                            {inv["ods code"]} {inv.af ? `(${inv.af})` : ''} - {inv.equipment || inv.equipment_2}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="flex gap-2">
+                          <select 
+                            className={`flex-1 bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-semibold focus:ring-2 focus:ring-red-500 ${dispatchData.items[item.name]?.code ? 'border-red-400 bg-red-50' : ''}`}
+                            value={dispatchData.items[item.name]?.code || ''}
+                            onChange={(e) => handleDispatchItemChange(item.name, 'code', e.target.value)}
+                          >
+                            <option value="">-- Selecionar ODS / N/A --</option>
+                            {filteredOptions.map(inv => (
+                              <option key={inv.id} value={inv["ods code"]}>
+                                {inv["ods code"]} {inv.af ? `(${inv.af})` : ''} - {inv.equipment || inv.equipment_2}
+                              </option>
+                            ))}
+                          </select>
+                          <button 
+                              onClick={() => setActiveScanner({ context: 'dispatch', name: item.name, isMulti: false })} 
+                              className="bg-slate-800 hover:bg-slate-700 text-white p-2.5 rounded-lg transition-colors shadow-sm" 
+                              title="Escanear QR"
+                          >
+                              <ScanIcon size={16} />
+                          </button>
+                      </div>
                     )}
                   </td>
                   <td className="p-4">
@@ -1632,15 +1808,24 @@
                       <div className="mb-8 bg-red-50 p-4 md:p-6 rounded-2xl border border-red-100">
                         <label className="block text-xs font-black text-red-800 uppercase tracking-widest mb-3">Vincular Equipamentos do Inventário</label>
                         
-                        <div className="relative mb-3">
-                          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-red-400" size={18} />
-                          <input 
-                            type="text" 
-                            placeholder="Pesquisar equipamento (Ex: AF 0285, Caliper...)" 
-                            className="w-full pl-12 pr-4 py-3 bg-white border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-red-500 shadow-sm"
-                            value={equipmentSearchTerm}
-                            onChange={(e) => setEquipmentSearchTerm(e.target.value)}
-                          />
+                        <div className="relative mb-3 flex gap-2">
+                          <div className="relative flex-1">
+                              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-red-400" size={18} />
+                              <input 
+                                type="text" 
+                                placeholder="Pesquisar equipamento (Ex: AF 0285, Caliper...)" 
+                                className="w-full pl-12 pr-4 py-3 bg-white border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-red-500 shadow-sm"
+                                value={equipmentSearchTerm}
+                                onChange={(e) => setEquipmentSearchTerm(e.target.value)}
+                              />
+                          </div>
+                          <button 
+                              onClick={() => setActiveScanner({ context: 'inout', title: 'Adicionar ao Relatório' })}
+                              className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-3 rounded-xl shadow-sm transition-colors flex items-center justify-center"
+                              title="Escanear Código QR"
+                          >
+                              <ScanIcon size={20} />
+                          </button>
                         </div>
 
                         <select 
@@ -2013,8 +2198,17 @@
                 )}
 
                 {/* --- RENDERIZAÇÃO DOS NOVOS COMPONENTES QR --- */}
-                {activeTab === 'qr-generator' && <QRGenerator />}
+                {activeTab === 'qr-generator' && <QRGenerator setPrintMessage={setPrintMessage} />}
                 {activeTab === 'qr-scanner' && <QRScanner />}
+
+                {/* MODAL DE SCANNER INLINE UNIVERSAL */}
+                {activeScanner && (
+                    <InlineQRScanner 
+                        title={activeScanner.context === 'dispatch' ? `Escanear: ${activeScanner.name}` : 'Escanear Equipamento (IN/OUT)'} 
+                        onScan={handleUniversalQRScan} 
+                        onClose={() => setActiveScanner(null)} 
+                    />
+                )}
 
               </main>
             </div>
